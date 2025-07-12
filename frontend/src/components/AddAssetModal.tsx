@@ -21,11 +21,11 @@ interface AddAssetModalProps {
 }
 
 const assetTypes = [
-  { value: 'stock', label: 'Stock' },
-  { value: 'deposit', label: 'Deposit' },
-  { value: 'preciousMetal', label: 'Precious Metal' },
-  { value: 'recurringIncome', label: 'Recurring Income' },
-  { value: 'cash', label: 'Cash' }
+  { value: 'stock', label: 'assetTypes.stock.title' },
+  { value: 'deposit', label: 'assetTypes.deposit.title' },
+  { value: 'preciousMetal', label: 'assetTypes.preciousMetal.title' },
+  { value: 'recurringIncome', label: 'assetTypes.recurringIncome.title' },
+  { value: 'cash', label: 'assets.cash' }
 ]
 
 const currencies = [
@@ -108,7 +108,7 @@ export function AddAssetModal({ isOpen, onClose, onAdd }: AddAssetModalProps) {
     
     // Validate stock ticker if it's a stock
     if (assetType === 'stock' && !isValidStockSymbol(formData.ticker)) {
-      alert('Please enter a valid stock ticker symbol (1-5 letters only).')
+      alert(t('addAssetModal.invalidTicker'))
       return
     }
     
@@ -267,7 +267,7 @@ export function AddAssetModal({ isOpen, onClose, onAdd }: AddAssetModalProps) {
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-foreground">
-              {t('assets.addNewAsset')}
+              {t('addAssetModal.title')}
             </h2>
             <Button variant="ghost" size="sm" onClick={onClose}>
               <X className="h-4 w-4" />
@@ -278,7 +278,7 @@ export function AddAssetModal({ isOpen, onClose, onAdd }: AddAssetModalProps) {
             {/* Asset Type Selection */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
-                Asset Type
+                {t('addAssetModal.assetType')}
               </label>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                 {assetTypes.map((type) => (
@@ -289,7 +289,7 @@ export function AddAssetModal({ isOpen, onClose, onAdd }: AddAssetModalProps) {
                     size="sm"
                     onClick={() => setAssetType(type.value)}
                   >
-                    {type.label}
+                    {t(type.label)}
                   </Button>
                 ))}
               </div>
@@ -298,7 +298,7 @@ export function AddAssetModal({ isOpen, onClose, onAdd }: AddAssetModalProps) {
             {/* Currency Selection */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
-                Currency
+                {t('addAssetModal.currency')}
               </label>
               <select
                 value={currency}
@@ -316,12 +316,12 @@ export function AddAssetModal({ isOpen, onClose, onAdd }: AddAssetModalProps) {
             {/* Common Fields */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">
-                Asset Name
+                {t('addAssetModal.assetName')}
               </label>
               <Input
                 value={formData.name}
                 onChange={(e) => handleInputChange('name', e.target.value)}
-                placeholder="Enter asset name"
+                placeholder={t('addAssetModal.assetNamePlaceholder')}
                 required
               />
             </div>
@@ -332,13 +332,13 @@ export function AddAssetModal({ isOpen, onClose, onAdd }: AddAssetModalProps) {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
-                      Ticker Symbol
+                      {t('addAssetModal.tickerSymbol')}
                     </label>
                     <div className="relative">
                       <Input
                         value={formData.ticker}
                         onChange={(e) => handleInputChange('ticker', e.target.value.toUpperCase())}
-                        placeholder="AAPL"
+                        placeholder={t('addAssetModal.tickerPlaceholder')}
                         required
                         className={`${
                           formData.ticker && !isValidStockSymbol(formData.ticker) 
@@ -348,20 +348,20 @@ export function AddAssetModal({ isOpen, onClose, onAdd }: AddAssetModalProps) {
                       />
                       {formData.ticker && !isValidStockSymbol(formData.ticker) && (
                         <p className="text-xs text-red-600 mt-1">
-                          Invalid ticker symbol. Use 1-5 letters only.
+                          {t('addAssetModal.invalidTicker')}
                         </p>
                       )}
                     </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
-                      Quantity
+                      {t('addAssetModal.quantity')}
                     </label>
                     <Input
                       type="number"
                       value={formData.quantity}
                       onChange={(e) => handleInputChange('quantity', e.target.value)}
-                      placeholder="10"
+                      placeholder={t('addAssetModal.quantityPlaceholder')}
                       required
                     />
                   </div>
@@ -369,20 +369,20 @@ export function AddAssetModal({ isOpen, onClose, onAdd }: AddAssetModalProps) {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
-                      Purchase Price ({currency})
+                      {t('addAssetModal.purchasePrice')} ({currency})
                     </label>
                     <Input
                       type="number"
                       step="0.01"
                       value={formData.purchasePrice}
                       onChange={(e) => handleInputChange('purchasePrice', e.target.value)}
-                      placeholder="150.00"
+                      placeholder={t('addAssetModal.purchasePricePlaceholder')}
                       required
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
-                      Current Price
+                      {t('addAssetModal.currentPrice')}
                     </label>
                     <div className="border border-input rounded-md bg-background p-3 min-h-[40px] flex items-center justify-between">
                       {formData.ticker && isValidStockSymbol(formData.ticker) ? (
@@ -390,7 +390,7 @@ export function AddAssetModal({ isOpen, onClose, onAdd }: AddAssetModalProps) {
                           {isLoadingPrice ? (
                             <div className="flex items-center gap-2">
                               <RefreshCw className="h-4 w-4 animate-spin" />
-                              <span className="text-sm text-muted-foreground">Fetching price...</span>
+                              <span className="text-sm text-muted-foreground">{t('addAssetModal.fetchingPrice')}</span>
                             </div>
                           ) : stockPrice ? (
                             <div className="flex items-center gap-2 flex-1">
@@ -422,10 +422,10 @@ export function AddAssetModal({ isOpen, onClose, onAdd }: AddAssetModalProps) {
                              <div className="flex items-center justify-between w-full">
                                <div className="flex flex-col">
                                  <span className="text-sm text-red-600">
-                                   Failed to fetch price
+                                   {t('addAssetModal.failedToFetchPrice')}
                                  </span>
                                  <span className="text-xs text-muted-foreground">
-                                   Will use purchase price as fallback
+                                   {t('addAssetModal.willUsePurchasePrice')}
                                  </span>
                                </div>
                                <Button
@@ -440,23 +440,23 @@ export function AddAssetModal({ isOpen, onClose, onAdd }: AddAssetModalProps) {
                              </div>
                            ) : (
                             <span className="text-sm text-muted-foreground">
-                              Enter a valid ticker symbol
+                              {t('addAssetModal.enterValidTicker')}
                             </span>
                           )}
                         </div>
                       ) : (
                         <span className="text-sm text-muted-foreground">
-                          Enter ticker symbol to get current price
+                          {t('addAssetModal.enterTickerToGetPrice')}
                         </span>
                       )}
                     </div>
                                          <p className="text-xs text-muted-foreground mt-1">
                        {stockPrice ? (
                          <span>
-                           Price from {stockPrice.source} • Updated {new Date(stockPrice.timestamp).toLocaleTimeString()}
+                           {t('addAssetModal.priceFrom')} {stockPrice.source} • {t('addAssetModal.updated')} {new Date(stockPrice.timestamp).toLocaleTimeString()}
                          </span>
                        ) : (
-                         'Price will be fetched automatically when you enter a valid ticker symbol'
+                         t('addAssetModal.priceWillBeFetched')
                        )}
                      </p>
                   </div>
@@ -469,27 +469,27 @@ export function AddAssetModal({ isOpen, onClose, onAdd }: AddAssetModalProps) {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
-                      Principal Amount ({currency})
+                      {t('addAssetModal.principalAmount')} ({currency})
                     </label>
                     <Input
                       type="number"
                       step="0.01"
                       value={formData.principal}
                       onChange={(e) => handleInputChange('principal', e.target.value)}
-                      placeholder="25000.00"
+                      placeholder={t('addAssetModal.principalPlaceholder')}
                       required
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
-                      Interest Rate (% per year)
+                      {t('addAssetModal.interestRate')}
                     </label>
                     <Input
                       type="number"
                       step="0.01"
                       value={formData.rate}
                       onChange={(e) => handleInputChange('rate', e.target.value)}
-                      placeholder="4.5"
+                      placeholder={t('addAssetModal.interestRatePlaceholder')}
                       required
                     />
                   </div>
@@ -499,7 +499,7 @@ export function AddAssetModal({ isOpen, onClose, onAdd }: AddAssetModalProps) {
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
                       <Calendar className="inline h-4 w-4 mr-1" />
-                      Start Date
+                      {t('addAssetModal.startDate')}
                     </label>
                     <Input
                       type="date"
@@ -508,24 +508,24 @@ export function AddAssetModal({ isOpen, onClose, onAdd }: AddAssetModalProps) {
                       required
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      When the deposit was made
+                      {t('addAssetModal.startDateHelp')}
                     </p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
                       <Settings className="inline h-4 w-4 mr-1" />
-                      Interest Type
+                      {t('addAssetModal.interestType')}
                     </label>
                     <select
                       value={formData.interestType}
                       onChange={(e) => handleInputChange('interestType', e.target.value)}
                       className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                     >
-                      <option value="compound">Compound Interest</option>
-                      <option value="simple">Simple Interest</option>
-                      <option value="progressive">Progressive Rates</option>
-                      <option value="variable">Variable Rates</option>
-                      <option value="tiered">Tiered Rates</option>
+                      <option value="compound">{t('addAssetModal.interestTypes.compound')}</option>
+                      <option value="simple">{t('addAssetModal.interestTypes.simple')}</option>
+                      <option value="progressive">{t('addAssetModal.interestTypes.progressive')}</option>
+                      <option value="variable">{t('addAssetModal.interestTypes.variable')}</option>
+                      <option value="tiered">{t('addAssetModal.interestTypes.tiered')}</option>
                     </select>
                     <p className="text-xs text-muted-foreground mt-1">
                       {getInterestTypeInfo(formData.interestType).description}
@@ -536,17 +536,17 @@ export function AddAssetModal({ isOpen, onClose, onAdd }: AddAssetModalProps) {
                 {(formData.interestType === 'compound' || formData.interestType === 'progressive') && (
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
-                      Compounding Frequency
+                      {t('addAssetModal.compoundingFrequency')}
                     </label>
                     <select
                       value={formData.compoundingFrequency}
                       onChange={(e) => handleInputChange('compoundingFrequency', e.target.value)}
                       className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                     >
-                      <option value="daily">Daily</option>
-                      <option value="monthly">Monthly</option>
-                      <option value="quarterly">Quarterly</option>
-                      <option value="annually">Annually</option>
+                      <option value="daily">{t('assetTypes.deposit.scheduleOptions.daily')}</option>
+                      <option value="monthly">{t('assetTypes.deposit.scheduleOptions.monthly')}</option>
+                      <option value="quarterly">{t('assetTypes.deposit.scheduleOptions.quarterly')}</option>
+                      <option value="annually">{t('assetTypes.deposit.scheduleOptions.annually')}</option>
                     </select>
                   </div>
                 )}
@@ -556,17 +556,17 @@ export function AddAssetModal({ isOpen, onClose, onAdd }: AddAssetModalProps) {
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
                       <Info className="inline h-4 w-4 mr-1" />
-                      Progressive Rate Schedule (JSON format)
+                      {t('addAssetModal.progressiveRateSchedule')}
                     </label>
                     <textarea
                       value={formData.progressiveRates}
                       onChange={(e) => handleInputChange('progressiveRates', e.target.value)}
                       className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm font-mono"
                       rows={4}
-                      placeholder='[{"months": 6, "rate": 3.0}, {"months": 6, "rate": 4.0}]'
+                      placeholder={t('addAssetModal.progressiveRatePlaceholder')}
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      Example: First 6 months at 3%, next 6 months at 4%, etc.
+                      {t('addAssetModal.progressiveRateExample')}
                     </p>
                   </div>
                 )}
@@ -576,17 +576,17 @@ export function AddAssetModal({ isOpen, onClose, onAdd }: AddAssetModalProps) {
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
                       <Info className="inline h-4 w-4 mr-1" />
-                      Variable Rate Schedule (JSON format)
+                      {t('addAssetModal.variableRateSchedule')}
                     </label>
                     <textarea
                       value={formData.variableRates}
                       onChange={(e) => handleInputChange('variableRates', e.target.value)}
                       className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm font-mono"
                       rows={4}
-                      placeholder='[{"date": "2024-01-01", "rate": 3.5}, {"date": "2024-06-01", "rate": 4.0}]'
+                      placeholder={t('addAssetModal.variableRatePlaceholder')}
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      Specify dates when interest rates change
+                      {t('addAssetModal.variableRateExample')}
                     </p>
                   </div>
                 )}
@@ -596,24 +596,24 @@ export function AddAssetModal({ isOpen, onClose, onAdd }: AddAssetModalProps) {
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
                       <Info className="inline h-4 w-4 mr-1" />
-                      Tiered Rate Structure (JSON format)
+                      {t('addAssetModal.tieredRateStructure')}
                     </label>
                     <textarea
                       value={formData.tieredRates}
                       onChange={(e) => handleInputChange('tieredRates', e.target.value)}
                       className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm font-mono"
                       rows={4}
-                      placeholder='[{"minBalance": 0, "maxBalance": 10000, "rate": 3.0}]'
+                      placeholder={t('addAssetModal.tieredRatePlaceholder')}
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      Different rates for different balance ranges
+                      {t('addAssetModal.tieredRateExample')}
                     </p>
                   </div>
                 )}
                 
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">
-                    Maturity Date (Optional)
+                    {t('addAssetModal.maturityDate')}
                   </label>
                   <Input
                     type="date"
@@ -621,7 +621,7 @@ export function AddAssetModal({ isOpen, onClose, onAdd }: AddAssetModalProps) {
                     onChange={(e) => handleInputChange('maturityDate', e.target.value)}
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Leave empty if no specific maturity date
+                    {t('addAssetModal.maturityDateHelp')}
                   </p>
                 </div>
                 
@@ -630,7 +630,7 @@ export function AddAssetModal({ isOpen, onClose, onAdd }: AddAssetModalProps) {
                   <div className="bg-muted/50 p-4 rounded-lg border">
                     <div className="flex items-center gap-2 mb-2">
                       <Calculator className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">Deposit Preview</span>
+                      <span className="text-sm font-medium">{t('addAssetModal.depositPreview')}</span>
                       <span className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded">
                         {getInterestTypeInfo(formData.interestType).name}
                       </span>
@@ -681,31 +681,31 @@ export function AddAssetModal({ isOpen, onClose, onAdd }: AddAssetModalProps) {
                       return (
                         <div className="space-y-2 text-sm">
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Principal:</span>
+                            <span className="text-muted-foreground">{t('addAssetModal.principal')}:</span>
                             <span className="font-medium">{currency} {formData.principal}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Interest Type:</span>
+                            <span className="text-muted-foreground">{t('addAssetModal.interestType')}:</span>
                             <span className="font-medium">{getInterestTypeInfo(formData.interestType).name}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Duration:</span>
+                            <span className="text-muted-foreground">{t('addAssetModal.duration')}:</span>
                             <span className="font-medium">{formatDepositDuration(depositValue)}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Interest Earned:</span>
+                            <span className="text-muted-foreground">{t('addAssetModal.interestEarned')}:</span>
                             <span className="font-medium text-green-600">
                               {currency} {depositValue.accruedInterest.toFixed(2)}
                             </span>
                           </div>
                           <div className="flex justify-between border-t pt-2">
-                            <span className="text-muted-foreground">Current Value:</span>
+                            <span className="text-muted-foreground">{t('addAssetModal.currentValue')}:</span>
                             <span className="font-bold text-lg">
                               {currency} {depositValue.currentValue.toFixed(2)}
                             </span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Status:</span>
+                            <span className="text-muted-foreground">{t('addAssetModal.status')}:</span>
                             <span className={`font-medium ${
                               depositValue.isMatured ? 'text-blue-600' : 'text-green-600'
                             }`}>
@@ -725,41 +725,41 @@ export function AddAssetModal({ isOpen, onClose, onAdd }: AddAssetModalProps) {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
-                      Weight (oz)
+                      {t('addAssetModal.weightOz')}
                     </label>
                     <Input
                       type="number"
                       step="0.01"
                       value={formData.weight}
                       onChange={(e) => handleInputChange('weight', e.target.value)}
-                      placeholder="1.00"
+                      placeholder={t('addAssetModal.weightPlaceholder')}
                       required
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
-                      Purity (%)
+                      {t('addAssetModal.purityPercent')}
                     </label>
                     <Input
                       type="number"
                       step="0.01"
                       value={formData.purity}
                       onChange={(e) => handleInputChange('purity', e.target.value)}
-                      placeholder="99.9"
+                      placeholder={t('addAssetModal.purityPlaceholder')}
                       required
                     />
                   </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">
-                    Current Price per oz ({currency})
+                    {t('addAssetModal.currentPricePerOz')} ({currency})
                   </label>
                   <Input
                     type="number"
                     step="0.01"
                     value={formData.currentPrice}
                     onChange={(e) => handleInputChange('currentPrice', e.target.value)}
-                    placeholder="2000.00"
+                    placeholder={t('addAssetModal.currentPricePlaceholder')}
                     required
                   />
                 </div>
@@ -771,29 +771,29 @@ export function AddAssetModal({ isOpen, onClose, onAdd }: AddAssetModalProps) {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
-                      Monthly Amount ({currency})
+                      {t('addAssetModal.monthlyAmount')} ({currency})
                     </label>
                     <Input
                       type="number"
                       step="0.01"
                       value={formData.monthlyAmount}
                       onChange={(e) => handleInputChange('monthlyAmount', e.target.value)}
-                      placeholder="500.00"
+                      placeholder={t('addAssetModal.monthlyAmountPlaceholder')}
                       required
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
-                      Frequency
+                      {t('addAssetModal.frequency')}
                     </label>
                     <select
                       value={formData.frequency}
                       onChange={(e) => handleInputChange('frequency', e.target.value)}
                       className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                     >
-                      <option value="monthly">Monthly</option>
-                      <option value="quarterly">Quarterly</option>
-                      <option value="yearly">Yearly</option>
+                      <option value="monthly">{t('addAssetModal.frequencies.monthly')}</option>
+                      <option value="quarterly">{t('addAssetModal.frequencies.quarterly')}</option>
+                      <option value="yearly">{t('addAssetModal.frequencies.yearly')}</option>
                     </select>
                   </div>
                 </div>
@@ -803,14 +803,14 @@ export function AddAssetModal({ isOpen, onClose, onAdd }: AddAssetModalProps) {
             {assetType === 'cash' && (
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  Amount ({currency})
+                  {t('addAssetModal.amount')} ({currency})
                 </label>
                 <Input
                   type="number"
                   step="0.01"
                   value={formData.amount}
                   onChange={(e) => handleInputChange('amount', e.target.value)}
-                  placeholder="1000.00"
+                  placeholder={t('addAssetModal.amountPlaceholder')}
                   required
                 />
               </div>
@@ -819,11 +819,11 @@ export function AddAssetModal({ isOpen, onClose, onAdd }: AddAssetModalProps) {
             {/* Form Actions */}
             <div className="flex justify-end space-x-4 pt-4">
               <Button type="button" variant="outline" onClick={onClose}>
-                Cancel
+                {t('addAssetModal.cancel')}
               </Button>
               <Button type="submit" className="flex items-center space-x-2">
                 <Plus className="h-4 w-4" />
-                <span>Add Asset</span>
+                <span>{t('addAssetModal.addAsset')}</span>
               </Button>
             </div>
           </form>
