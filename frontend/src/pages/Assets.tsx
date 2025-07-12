@@ -561,7 +561,10 @@ function Assets() {
   const { isAuthenticated, user } = useAuth()
   const [assets, setAssets] = useState<Asset[]>([])
   const [convertedAssets, setConvertedAssets] = useState<Asset[]>([])
-  const [displayCurrency, setDisplayCurrency] = useState('USD')
+  const [displayCurrency, setDisplayCurrency] = useState(() => {
+    // Load saved currency from localStorage or default to USD
+    return localStorage.getItem('displayCurrency') || 'USD'
+  })
   const [showAddModal, setShowAddModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null)
@@ -1070,6 +1073,8 @@ function Assets() {
   }
 
   const handleCurrencyChange = (currency: string) => {
+    // Save selected currency to localStorage
+    localStorage.setItem('displayCurrency', currency)
     updateDisplayCurrency(currency)
   }
 
@@ -1085,7 +1090,9 @@ function Assets() {
   // Load assets when component mounts
   useEffect(() => {
     if (assets.length > 0) {
-      updateDisplayCurrency('USD')
+      // Use saved currency from localStorage or default to USD
+      const savedCurrency = localStorage.getItem('displayCurrency') || 'USD'
+      updateDisplayCurrency(savedCurrency)
     }
   }, [assets.length])
 
