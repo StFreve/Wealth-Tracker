@@ -277,6 +277,9 @@
       "yearly": "Ежегодно"
     }
   },
+  "editAssetModal": {
+    "cannotChangeType": "Тип актива нельзя изменить при редактировании"
+  },
   "analytics": {
     "title": "Аналитика",
     "overview": "Обзор",
@@ -298,7 +301,7 @@
     "allTime": "За все время",
     "portfolioValue": "Стоимость портфеля",
     "totalReturn": "Общая доходность",
-    "averageReturn": "Средняя доходность",
+    "averageReturn": "Прибыль/убыток за последний месяц",
     "volatility": "Волатильность",
     "sharpeRatio": "Коэффициент Шарпа",
     "maxDrawdown": "Максимальная просадка",

@@ -67,7 +67,7 @@ export default function Analytics() {
                 {t('analytics.averageReturn')}
               </p>
               <p className="text-2xl font-bold text-profit">
-                +{formatPercentage(12.5)}
+                +{formatCurrency(450)}
               </p>
             </div>
             <BarChart3 className="h-8 w-8 text-profit" />

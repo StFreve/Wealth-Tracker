@@ -53,6 +53,10 @@ const convertAssetValues = async (assets: any[], targetCurrency: string = 'USD',
       let convertedAccruedInterest = asset.accruedInterest || 0
       let convertedGain = asset.gain || 0
       
+      // Handle recurring income specific fields
+      let convertedAmountPerPeriod = parseFloat(String(asset.amountPerPeriod || asset.originalAmountPerPeriod || 0))
+      let convertedMonthlyEquivalent = parseFloat(String(asset.monthlyEquivalent || asset.originalMonthlyEquivalent || 0))
+      
       if (assetCurrency !== targetCurrency) {
         // Only convert non-zero amounts to avoid API errors
         if (assetValue > 0) {
@@ -69,6 +73,19 @@ const convertAssetValues = async (assets: any[], targetCurrency: string = 'USD',
           // Preserve the sign of the original gain
           convertedGain = asset.gain < 0 ? -convertedGain : convertedGain
         }
+        
+        // Convert recurring income specific fields
+        if (asset.type === 'recurringIncome' || asset.type === 'recurring_income') {
+          const originalAmountPerPeriod = parseFloat(String(asset.originalAmountPerPeriod || asset.amountPerPeriod || 0))
+          const originalMonthlyEquivalent = parseFloat(String(asset.originalMonthlyEquivalent || asset.monthlyEquivalent || 0))
+          
+          if (originalAmountPerPeriod > 0) {
+            convertedAmountPerPeriod = await convertAmount(originalAmountPerPeriod, assetCurrency, targetCurrency)
+          }
+          if (originalMonthlyEquivalent > 0) {
+            convertedMonthlyEquivalent = await convertAmount(originalMonthlyEquivalent, assetCurrency, targetCurrency)
+          }
+        }
       }
       
       results.push({
@@ -77,9 +94,13 @@ const convertAssetValues = async (assets: any[], targetCurrency: string = 'USD',
         principal: convertedPrincipal,
         accruedInterest: convertedAccruedInterest,
         gain: convertedGain,
+        amountPerPeriod: convertedAmountPerPeriod,
+        monthlyEquivalent: convertedMonthlyEquivalent,
         originalValue: assetValue,
         originalPrincipal: asset.principal || 0,
         originalGain: asset.gain || 0,
+        originalAmountPerPeriod: parseFloat(String(asset.originalAmountPerPeriod || asset.amountPerPeriod || 0)),
+        originalMonthlyEquivalent: parseFloat(String(asset.originalMonthlyEquivalent || asset.monthlyEquivalent || 0)),
         originalCurrency: assetCurrency,
         targetCurrency
       })
@@ -88,9 +109,13 @@ const convertAssetValues = async (assets: any[], targetCurrency: string = 'USD',
       results.push({
         ...asset,
         convertedValue: asset.value || 0,
+        amountPerPeriod: parseFloat(String(asset.amountPerPeriod || 0)),
+        monthlyEquivalent: parseFloat(String(asset.monthlyEquivalent || 0)),
         originalValue: asset.value || 0,
         originalPrincipal: asset.principal || 0,
         originalGain: asset.gain || 0,
+        originalAmountPerPeriod: parseFloat(String(asset.amountPerPeriod || 0)),
+        originalMonthlyEquivalent: parseFloat(String(asset.monthlyEquivalent || 0)),
         originalCurrency: asset.currency || 'USD',
         targetCurrency
       })
@@ -116,7 +141,7 @@ function CurrencyTooltip({ children, originalAmount, originalCurrency, converted
   if (originalCurrency === convertedCurrency) {
     return <>{children}</>
   }
-  
+
   return (
     <div 
       className="relative inline-block"
@@ -295,19 +320,21 @@ function AssetCard({
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">
-              {asset.type === 'deposit' ? t('assets.accountBalance') : t('assets.marketValue')}
+                    {asset.type === 'deposit' ? t('assets.accountBalance') : 
+                     asset.type === 'recurringIncome' ? 'Annual Income Value' : 
+                     t('assets.marketValue')}
                   </span>
-            <CurrencyTooltip
-              originalAmount={assetAny.originalValue || getDisplayValue(asset)}
-              originalCurrency={assetAny.originalCurrency || asset.currency || displayCurrency}
-              convertedAmount={getDisplayValue(asset)}
-              convertedCurrency={displayCurrency}
-              exchangeRate={assetAny.originalCurrency !== displayCurrency ? getDisplayValue(asset) / (assetAny.originalValue || getDisplayValue(asset)) : undefined}
-            >
-                  <span className="font-medium text-foreground">
-                {formatCurrencyWithSymbol(getDisplayValue(asset), displayCurrency)}
-                  </span>
-            </CurrencyTooltip>
+                  <CurrencyTooltip
+                    originalAmount={assetAny.originalValue || getDisplayValue(asset)}
+                    originalCurrency={assetAny.originalCurrency || asset.currency || displayCurrency}
+                    convertedAmount={getDisplayValue(asset)}
+                    convertedCurrency={displayCurrency}
+                    exchangeRate={assetAny.originalCurrency !== displayCurrency ? getDisplayValue(asset) / (assetAny.originalValue || getDisplayValue(asset)) : undefined}
+                  >
+                    <span className="font-medium text-foreground">
+                      {formatCurrencyWithSymbol(getDisplayValue(asset), displayCurrency)}
+                    </span>
+                  </CurrencyTooltip>
                 </div>
 
                 {asset.type === 'stock' && (
@@ -351,8 +378,8 @@ function AssetCard({
                 </span>
                 <span className="text-sm text-foreground">
                   {(asset.rate || asset.interestRate || 0).toFixed(2)}% per year
-                </span>
-              </div>
+                      </span>
+                    </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-muted-foreground">
                   Interest Type
@@ -413,61 +440,116 @@ function AssetCard({
                   </span>
                 </div>
               )}
-            </>
-          )}
+                  </>
+                )}
+
+            {asset.type === 'recurringIncome' && (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    Amount per Period
+                  </span>
+                  <CurrencyTooltip
+                    originalAmount={assetAny.originalAmountPerPeriod || (asset.amountPerPeriod || 0)}
+                    originalCurrency={assetAny.originalCurrency || asset.currency || displayCurrency}
+                    convertedAmount={asset.amountPerPeriod || 0}
+                    convertedCurrency={displayCurrency}
+                  >
+                    <span className="text-sm text-foreground">
+                      {formatCurrencyWithSymbol(asset.amountPerPeriod || 0, displayCurrency)}
+                    </span>
+                  </CurrencyTooltip>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    Payment Frequency
+                  </span>
+                  <span className="text-sm text-foreground font-medium">
+                    {t(`addAssetModal.${asset.frequency || 'monthly'}`)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    Monthly Equivalent
+                  </span>
+                  <CurrencyTooltip
+                    originalAmount={assetAny.originalMonthlyEquivalent || (asset.monthlyEquivalent || 0)}
+                    originalCurrency={assetAny.originalCurrency || asset.currency || displayCurrency}
+                    convertedAmount={asset.monthlyEquivalent || 0}
+                    convertedCurrency={displayCurrency}
+                  >
+                    <span className="text-sm text-green-600 font-medium">
+                      {formatCurrencyWithSymbol(asset.monthlyEquivalent || 0, displayCurrency)}
+                    </span>
+                  </CurrencyTooltip>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    Annualized Value
+                  </span>
+                  <span className="text-sm text-foreground">
+                    {formatCurrencyWithSymbol(getDisplayValue(asset), displayCurrency)}
+                  </span>
+                </div>
+              </>
+            )}
 
           {/* Gross Profit/Loss */}
-          <div className="flex justify-between items-center pt-2 border-t border-border">
-            <span className="text-sm text-muted-foreground">
-              {t('assets.grossProfitLoss')}
-                  </span>
-                  <div className="flex items-center space-x-1">
-              <CurrencyTooltip
-                originalAmount={assetAny.originalGain || Math.abs(grossProfit)}
-                originalCurrency={assetAny.originalCurrency || asset.currency || displayCurrency}
-                convertedAmount={Math.abs(grossProfit)}
-                convertedCurrency={displayCurrency}
-              >
-                <span className={`font-medium ${grossProfit >= 0 ? 'text-profit' : 'text-loss'}`}>
-                  {grossProfit >= 0 ? '+' : ''}
-                  {formatCurrencyWithSymbol(Math.abs(grossProfit), displayCurrency)}
-                </span>
-              </CurrencyTooltip>
-              <span className={`text-sm ${(asset.gainPercent || 0) >= 0 ? 'text-profit' : 'text-loss'}`}>
-                ({formatPercentage(Math.abs(asset.gainPercent || 0))})
+            <div className="flex justify-between items-center pt-2 border-t border-border">
+              <span className="text-sm text-muted-foreground">
+                {asset.type === 'recurringIncome' ? 'Annual Income' : t('assets.grossProfitLoss')}
               </span>
+              <div className="flex items-center space-x-1">
+                <CurrencyTooltip
+                  originalAmount={assetAny.originalGain || Math.abs(grossProfit)}
+                  originalCurrency={assetAny.originalCurrency || asset.currency || displayCurrency}
+                  convertedAmount={Math.abs(grossProfit)}
+                  convertedCurrency={displayCurrency}
+                >
+                  <span className={`font-medium ${asset.type === 'recurringIncome' ? 'text-green-600' : grossProfit >= 0 ? 'text-profit' : 'text-loss'}`}>
+                    {asset.type === 'recurringIncome' ? '+' : grossProfit >= 0 ? '+' : ''}
+                    {formatCurrencyWithSymbol(Math.abs(grossProfit), displayCurrency)}
+                  </span>
+                </CurrencyTooltip>
+                {asset.type !== 'recurringIncome' && (
+                  <span className={`text-sm ${(asset.gainPercent || 0) >= 0 ? 'text-profit' : 'text-loss'}`}>
+                    ({formatPercentage(Math.abs(asset.gainPercent || 0))})
+                  </span>
+                )}
+              </div>
             </div>
-          </div>
 
-          {/* Tax Information */}
-          {taxCalculation.taxRate > 0 && (
+            {/* Tax Information */}
+            {taxCalculation.taxRate > 0 && (
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">
+                  {t('assets.tax')} ({formatPercentage(taxCalculation.taxRate)})
+                </span>
+                <span className="font-medium text-loss">
+                  -{formatCurrencyWithSymbol(taxCalculation.taxAmount, displayCurrency)}
+                </span>
+              </div>
+            )}
+
+            {/* Net Profit/Loss */}
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground">
-                {t('assets.tax')} ({formatPercentage(taxCalculation.taxRate)})
+                {asset.type === 'recurringIncome' ? 'Net Annual Income' : t('assets.netProfitLoss')}
               </span>
-              <span className="font-medium text-loss">
-                -{formatCurrencyWithSymbol(taxCalculation.taxAmount, displayCurrency)}
-              </span>
+              <div className="flex items-center space-x-1">
+                <span className={`font-medium ${asset.type === 'recurringIncome' ? 'text-green-600' : taxCalculation.netProfit >= 0 ? 'text-profit' : 'text-loss'}`}>
+                  {asset.type === 'recurringIncome' ? '+' : taxCalculation.netProfit >= 0 ? '+' : ''}
+                  {formatCurrencyWithSymbol(Math.abs(taxCalculation.netProfit), displayCurrency)}
+                </span>
+                {asset.type === 'recurringIncome' ? (
+                  <TrendingUp className="h-4 w-4 text-green-600" />
+                ) : taxCalculation.netProfit >= 0 ? (
+                  <TrendingUp className="h-4 w-4 text-profit" />
+                ) : (
+                  <TrendingDown className="h-4 w-4 text-loss" />
+                )}
+              </div>
             </div>
-          )}
-
-          {/* Net Profit/Loss */}
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-muted-foreground">
-              {t('assets.netProfitLoss')}
-                    </span>
-            <div className="flex items-center space-x-1">
-              <span className={`font-medium ${taxCalculation.netProfit >= 0 ? 'text-profit' : 'text-loss'}`}>
-                {taxCalculation.netProfit >= 0 ? '+' : ''}
-                {formatCurrencyWithSymbol(Math.abs(taxCalculation.netProfit), displayCurrency)}
-                    </span>
-              {taxCalculation.netProfit >= 0 ? (
-                      <TrendingUp className="h-4 w-4 text-profit" />
-                    ) : (
-                      <TrendingDown className="h-4 w-4 text-loss" />
-                    )}
-                  </div>
-                </div>
               </div>
             </div>
           </Card>
@@ -528,7 +610,12 @@ function Assets() {
     setIsLoading(true)
     try {
       const data = await assetsApi.getAllAssets()
-      setAssets(data)
+      // Map backend asset types to frontend types
+      const mappedAssets = data.map(asset => ({
+        ...asset,
+        type: mapAssetTypeFromBackend(asset.type)
+      }))
+      setAssets(mappedAssets)
       
       // Load user preferences to get tax settings
       if (user?.preferences?.taxSettings) {
@@ -571,11 +658,25 @@ function Assets() {
 
   // Helper functions for mapping frontend to backend format
   const mapAssetType = (type: string) => {
-    switch (type) {
-      case 'preciousMetal': return 'precious_metal'
-      case 'recurringIncome': return 'recurring_income'
-      default: return type
+    const typeMap: { [key: string]: string } = {
+      'stock': 'stock',
+      'deposit': 'deposit', 
+      'preciousMetal': 'precious_metal',
+      'recurringIncome': 'recurring_income',
+      'cash': 'cash'
     }
+    return typeMap[type] || type
+  }
+
+  const mapAssetTypeFromBackend = (type: string) => {
+    const typeMap: { [key: string]: string } = {
+      'stock': 'stock',
+      'deposit': 'deposit', 
+      'precious_metal': 'preciousMetal',
+      'recurring_income': 'recurringIncome',
+      'cash': 'cash'
+    }
+    return typeMap[type] || type
   }
 
   // Map compounding frequency to backend enum
@@ -776,11 +877,86 @@ function Assets() {
   const updateDisplayCurrency = async (currency: string, assetsToConvert = assets) => {
     setIsConverting(true)
     try {
-      // Update deposit values with current calculations before conversion
+      // First, fetch live prices for all stock assets
+      const stockAssets = assetsToConvert.filter(asset => asset.type === 'stock')
+      const livePrices: { [symbol: string]: number } = {}
+      
+      // Fetch live prices for all stocks in parallel
+      if (stockAssets.length > 0) {
+        const pricePromises = stockAssets.map(async (asset) => {
+          const symbol = asset.ticker || asset.symbol
+          if (symbol) {
+            try {
+              const response = await fetch(`http://localhost:3001/api/market-data/stocks/${symbol}`, {
+                headers: {
+                  'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+                  'Content-Type': 'application/json',
+                }
+              })
+              if (response.ok) {
+                const stockData = await response.json()
+                return { symbol, price: stockData.price }
+              }
+            } catch (error) {
+              console.warn(`Failed to fetch live price for ${symbol}:`, error)
+            }
+          }
+          return null
+        })
+        
+        const priceResults = await Promise.all(pricePromises)
+        priceResults.forEach(result => {
+          if (result) {
+            livePrices[result.symbol] = result.price
+          }
+        })
+      }
+
+      // Update asset values with current calculations before conversion
       const updatedAssets = assetsToConvert.map(asset => {
+        // Process stocks - calculate current value and gains using live prices when available
+        if (asset.type === 'stock' && asset.quantity) {
+          const quantity = parseFloat(asset.quantity?.toString() || '0')
+          const purchasePrice = parseFloat(asset.purchasePrice?.toString() || '0')
+          const symbol = asset.ticker || asset.symbol
+          
+          // Use live price if available, otherwise fall back to stored price
+          const currentPrice = (symbol && livePrices[symbol]) || parseFloat(asset.currentPrice?.toString() || '0')
+          
+          if (quantity > 0 && currentPrice > 0) {
+            const currentValue = currentPrice * quantity
+            const purchaseCost = purchasePrice * quantity
+            const gain = currentValue - purchaseCost
+            const gainPercent = purchaseCost > 0 ? (gain / purchaseCost) * 100 : 0
+            
+            console.log('Processing stock with live price:', {
+              name: asset.name,
+              symbol: symbol,
+              quantity,
+              storedPrice: asset.currentPrice,
+              livePrice: symbol ? livePrices[symbol] : undefined,
+              currentPrice,
+              purchasePrice,
+              currentValue,
+              gain,
+              gainPercent
+            })
+            
+            return {
+              ...asset,
+              ticker: asset.ticker || asset.symbol, // Map symbol to ticker for compatibility
+              currentPrice: currentPrice, // Update with live price
+              value: currentValue,
+              gain: gain,
+              gainPercent: gainPercent
+            }
+          }
+        }
+        
+        // Process deposits - calculate current value with interest
         if (asset.type === 'deposit' && asset.startDate && asset.principal) {
           // Map backend field names to frontend expected names
-          const principal = parseFloat(asset.principal?.toString() || '0')
+          const principal = asset.principal || asset.purchasePrice || 0
           const rate = parseFloat(asset.rate?.toString() || asset.interestRate?.toString() || '0')
           const startDate = asset.startDate
           const maturityDate = asset.maturityDate || asset.endDate
@@ -830,6 +1006,54 @@ function Assets() {
             }
           }
         }
+        
+        // Process recurring income - calculate monthly and annual values
+        if (asset.type === 'recurringIncome') {
+          const monthlyAmount = parseFloat(String(asset.monthlyAmount || asset.amountPerPeriod || 0))
+          const frequency = asset.frequency || 'monthly'
+          
+          // Calculate monthly equivalent
+          let monthlyEquivalent = monthlyAmount
+          switch (frequency) {
+            case 'weekly':
+              monthlyEquivalent = monthlyAmount * 4.33
+              break
+            case 'biweekly':
+              monthlyEquivalent = monthlyAmount * 2.17
+              break
+            case 'monthly':
+              monthlyEquivalent = monthlyAmount
+              break
+            case 'quarterly':
+              monthlyEquivalent = monthlyAmount / 3
+              break
+            case 'semiannually':
+              monthlyEquivalent = monthlyAmount / 6
+              break
+            case 'annually':
+              monthlyEquivalent = monthlyAmount / 12
+              break
+            default:
+              monthlyEquivalent = monthlyAmount
+          }
+          
+          // Calculate annual value
+          const annualValue = monthlyEquivalent * 12
+          
+          console.log(`Processing recurring income ${asset.name}: monthlyAmount=${monthlyAmount}, frequency=${frequency}, monthlyEquivalent=${monthlyEquivalent}, annualValue=${annualValue}`)
+          
+          return {
+            ...asset,
+            value: annualValue,
+            monthlyEquivalent,
+            gain: annualValue, // Recurring income is pure gain
+            gainPercent: 100, // 100% gain since it's all income
+            // Store original amounts for currency conversion
+            originalAmountPerPeriod: monthlyAmount,
+            originalMonthlyEquivalent: monthlyEquivalent
+          }
+        }
+        
         return asset
       })
       
@@ -866,62 +1090,177 @@ function Assets() {
   }, [assets.length])
 
   const getTotalValue = () => {
-    return convertedAssets.reduce((sum, asset) => {
-      return sum + ((asset as any).convertedValue || asset.value || 0)
-    }, 0)
+    return convertedAssets
+      .filter(asset => asset.type !== 'recurringIncome')
+      .reduce((sum, asset) => {
+        return sum + ((asset as any).convertedValue || asset.value || 0)
+      }, 0)
   }
 
   const getTotalGain = () => {
-    return convertedAssets.reduce((sum, asset) => {
-      const assetAny = asset as any
-      const gainValue = assetAny.convertedValue && assetAny.originalValue
-        ? (asset.gain || 0) * (assetAny.convertedValue / assetAny.originalValue)
-        : (asset.gain || 0)
-      return sum + gainValue
-    }, 0)
+    return convertedAssets
+      .filter(asset => asset.type !== 'recurringIncome')
+      .reduce((sum, asset) => {
+        const assetAny = asset as any
+        const gainValue = assetAny.convertedValue && assetAny.originalValue
+          ? (asset.gain || 0) * (assetAny.convertedValue / assetAny.originalValue)
+          : (asset.gain || 0)
+        return sum + gainValue
+      }, 0)
   }
 
   const getTotalNetGain = () => {
-    return convertedAssets.reduce((sum, asset) => {
+    return convertedAssets
+      .filter(asset => asset.type !== 'recurringIncome')
+      .reduce((sum, asset) => {
+        const assetAny = asset as any
+        
+        // Calculate after-tax profit for this asset
+        const grossProfit = getDisplayGain(asset) // Already converted gain
+        
+        // Get original gain for tax calculation
+        const originalGain = assetAny.originalGain || assetAny.gain || grossProfit
+        
+        // Calculate tax on original gain, then convert to display currency
+        const originalTaxCalculation = calculateAfterTaxProfit(
+          asset.type,
+          asset.type === 'deposit' ? 'interest' : 'capital_gains',
+          originalGain,
+          user?.preferences?.taxSettings
+        )
+        
+        // If currency conversion was applied, convert tax amounts
+        let taxCalculation
+        if (assetAny.originalCurrency && assetAny.originalCurrency !== displayCurrency && originalGain !== 0) {
+          // Tax was calculated on original amount, so convert the tax and net amounts
+          const conversionRatio = grossProfit / originalGain
+          taxCalculation = {
+            grossProfit: grossProfit,
+            taxAmount: originalTaxCalculation.taxAmount * Math.abs(conversionRatio),
+            netProfit: originalTaxCalculation.netProfit * conversionRatio,
+            taxRate: originalTaxCalculation.taxRate
+          }
+        } else {
+          // No conversion needed
+          taxCalculation = {
+            grossProfit: grossProfit,
+            taxAmount: originalTaxCalculation.taxAmount,
+            netProfit: originalTaxCalculation.netProfit,
+            taxRate: originalTaxCalculation.taxRate
+          }
+        }
+        
+        return sum + taxCalculation.netProfit
+      }, 0)
+  }
+
+  const getLastMonthProfitLoss = () => {
+    if (convertedAssets.length === 0) return 0
+    
+    console.log('🔍 Debug: Starting monthly profit calculation')
+    console.log('📊 Total assets:', convertedAssets.length)
+    
+    let totalLastMonthProfit = 0
+    
+    convertedAssets.forEach(asset => {
+      console.log('Processing asset:', asset.name, 'Type:', asset.type)
+      
       const assetAny = asset as any
+      const currentValue = getDisplayValue(asset)
+      const currentGain = getDisplayGain(asset)
       
-      // Calculate after-tax profit for this asset
-      const grossProfit = getDisplayGain(asset) // Already converted gain
-      
-      // Get original gain for tax calculation
-      const originalGain = assetAny.originalGain || assetAny.gain || grossProfit
-      
-      // Calculate tax on original gain, then convert to display currency
-      const originalTaxCalculation = calculateAfterTaxProfit(
-        asset.type,
-        asset.type === 'deposit' ? 'interest' : 'capital_gains',
-        originalGain,
-        user?.preferences?.taxSettings
-      )
-      
-      // If currency conversion was applied, convert tax amounts
-      let taxCalculation
-      if (assetAny.originalCurrency && assetAny.originalCurrency !== displayCurrency && originalGain !== 0) {
-        // Tax was calculated on original amount, so convert the tax and net amounts
-        const conversionRatio = grossProfit / originalGain
-        taxCalculation = {
-          grossProfit: grossProfit,
-          taxAmount: originalTaxCalculation.taxAmount * Math.abs(conversionRatio),
-          netProfit: originalTaxCalculation.netProfit * conversionRatio,
-          taxRate: originalTaxCalculation.taxRate
-        }
-      } else {
-        // No conversion needed
-        taxCalculation = {
-          grossProfit: grossProfit,
-          taxAmount: originalTaxCalculation.taxAmount,
-          netProfit: originalTaxCalculation.netProfit,
-          taxRate: originalTaxCalculation.taxRate
-        }
+      // Calculate what the value would have been a month ago
+      const dateString = asset.purchaseDate || asset.createdAt
+      if (!dateString && asset.type !== 'recurringIncome') {
+        console.log('⚠️ Asset without date:', asset.name)
+        return
       }
       
-      return sum + taxCalculation.netProfit
-    }, 0)
+      // For recurring income, we don't need purchase date - it's ongoing income
+      let lastMonthProfit = 0
+      
+      if (asset.type === 'recurringIncome') {
+        const assetAny = asset as any
+        
+        // Use the converted monthly equivalent if available, otherwise calculate from original values
+        if (assetAny.monthlyEquivalent && !isNaN(assetAny.monthlyEquivalent)) {
+          lastMonthProfit = assetAny.monthlyEquivalent
+          console.log(`💰 Recurring Income ${asset.name}: Using converted monthly equivalent = ${lastMonthProfit}`)
+        } else {
+          // Calculate from original values
+          const amount = parseFloat(String(assetAny.amountPerPeriod || assetAny.monthlyAmount || 0))
+          const frequency = assetAny.frequency || 'monthly'
+          
+          switch (frequency) {
+            case 'weekly':
+              lastMonthProfit = amount * 4.33 // Average weeks per month
+              break
+            case 'biweekly':
+              lastMonthProfit = amount * 2.17 // Average bi-weeks per month
+              break
+            case 'monthly':
+              lastMonthProfit = amount
+              break
+            case 'quarterly':
+              lastMonthProfit = amount / 3
+              break
+            case 'semiannually':
+              lastMonthProfit = amount / 6
+              break
+            case 'annually':
+              lastMonthProfit = amount / 12
+              break
+            default:
+              lastMonthProfit = amount // Default to monthly
+          }
+          console.log(`💰 Recurring Income ${asset.name}: Calculated monthly equivalent = ${lastMonthProfit} from amount=${amount}, frequency=${frequency}`)
+        }
+        
+        totalLastMonthProfit += lastMonthProfit
+        console.log(`   Adding ${lastMonthProfit} to total. New total: ${totalLastMonthProfit}`)
+        return // Early return for recurring income
+      }
+      
+      const purchaseDate = new Date(dateString || new Date())
+      const currentDate = new Date()
+      const lastMonthDate = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, currentDate.getDate())
+      
+      // Calculate months held now vs months held last month
+      const monthsHeldNow = Math.max(
+        (currentDate.getFullYear() - purchaseDate.getFullYear()) * 12 + 
+        (currentDate.getMonth() - purchaseDate.getMonth()), 0
+      )
+      const monthsHeldLastMonth = Math.max(
+        (lastMonthDate.getFullYear() - purchaseDate.getFullYear()) * 12 + 
+        (lastMonthDate.getMonth() - purchaseDate.getMonth()), 0
+      )
+      
+      if (asset.type === 'deposit') {
+        // For deposits, calculate monthly interest earned
+        const principal = asset.principal || asset.purchasePrice || 0
+        const annualRate = (asset.interestRate || 0) / 100
+        const monthlyRate = annualRate / 12
+        lastMonthProfit = principal * monthlyRate
+        console.log(`🏦 Deposit ${asset.name}: Monthly interest = ${lastMonthProfit}`)
+      } else {
+        // For other assets, calculate the profit change from last month
+        if (monthsHeldNow > monthsHeldLastMonth) {
+          // Asset was acquired this month, so last month profit is the gain divided by months held
+          lastMonthProfit = currentGain / Math.max(monthsHeldNow, 1)
+        } else if (monthsHeldNow > 0) {
+          // Estimate last month's profit as 1/12 of annualized gain
+          const annualizedGain = currentGain * (12 / monthsHeldNow)
+          lastMonthProfit = annualizedGain / 12
+        }
+        console.log(`📈 Asset ${asset.name}: Last month profit = ${lastMonthProfit}`)
+      }
+      
+      totalLastMonthProfit += lastMonthProfit
+      console.log(`   Adding ${lastMonthProfit} to total. New total: ${totalLastMonthProfit}`)
+    })
+    
+    console.log('💰 Final total last month profit:', totalLastMonthProfit)
+    return totalLastMonthProfit
   }
 
   const getDisplayValue = (asset: any) => {
@@ -1275,10 +1614,10 @@ function Assets() {
         <Card className="metric-card">
           <div className="text-center">
             <p className="text-sm font-medium text-muted-foreground mb-1">
-              Average Return
+              {t('analytics.averageReturn')}
             </p>
             <p className="text-2xl font-bold text-profit">
-              +{formatPercentage(12.5)}
+              +{formatCurrencyWithSymbol(getLastMonthProfitLoss(), displayCurrency)}
             </p>
           </div>
         </Card>
@@ -1307,6 +1646,6 @@ function Assets() {
       />
     </div>
   )
-}
+} 
 
 export default Assets

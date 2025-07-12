@@ -277,6 +277,9 @@
       "yearly": "Yearly"
     }
   },
+  "editAssetModal": {
+    "cannotChangeType": "Asset type cannot be changed when editing"
+  },
   "analytics": {
     "title": "Analytics",
     "overview": "Overview",
@@ -298,7 +301,7 @@
     "allTime": "All Time",
     "portfolioValue": "Portfolio Value",
     "totalReturn": "Total Return",
-    "averageReturn": "Average Return",
+    "averageReturn": "Last Month Profit/Loss",
     "volatility": "Volatility",
     "sharpeRatio": "Sharpe Ratio",
     "maxDrawdown": "Max Drawdown",
