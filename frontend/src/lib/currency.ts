@@ -28,7 +28,11 @@ export const CURRENCIES: CurrencyInfo[] = [
   { code: 'RUB', name: 'Russian Ruble', symbol: '₽' },
   { code: 'INR', name: 'Indian Rupee', symbol: '₹' },
   { code: 'AMD', name: 'Armenian Dram', symbol: '֏' },
-  { code: 'GEL', name: 'Georgian Lari', symbol: '₾' }
+  { code: 'GEL', name: 'Georgian Lari', symbol: '₾' },
+  { code: 'XAU', name: 'Gold (Troy Ounce)', symbol: 'Au' },
+  { code: 'XAG', name: 'Silver (Troy Ounce)', symbol: 'Ag' },
+  { code: 'XPT', name: 'Platinum (Troy Ounce)', symbol: 'Pt' },
+  { code: 'XPD', name: 'Palladium (Troy Ounce)', symbol: 'Pd' }
 ]
 
 // Cache for exchange rates
@@ -52,7 +56,11 @@ const FALLBACK_RATES: ExchangeRates = {
   RUB: 95.0,
   INR: 83.0,
   AMD: 385.0,
-  GEL: 2.70
+  GEL: 2.70,
+  XAU: 0.0005,   // Gold: ~$2,000 per troy ounce
+  XAG: 0.04,     // Silver: ~$25 per troy ounce
+  XPT: 0.001,    // Platinum: ~$1,000 per troy ounce
+  XPD: 0.00083   // Palladium: ~$1,200 per troy ounce
 }
 
 // Loading state management

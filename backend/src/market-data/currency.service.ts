@@ -35,6 +35,10 @@ export class CurrencyService {
     INR: 83.0,
     AMD: 385.0,
     GEL: 2.70,
+    XAU: 0.0005,   // Gold: ~$2,000 per troy ounce
+    XAG: 0.04,     // Silver: ~$25 per troy ounce
+    XPT: 0.001,    // Platinum: ~$1,000 per troy ounce
+    XPD: 0.00083   // Palladium: ~$1,200 per troy ounce
   };
 
   // API sources with CORS-enabled endpoints

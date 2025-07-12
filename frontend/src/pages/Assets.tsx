@@ -46,7 +46,8 @@ const convertAssetValues = async (assets: any[], targetCurrency: string = 'USD',
   for (const asset of assets) {
     try {
       const assetCurrency = asset.currency || 'USD'
-      const assetValue = asset.value || 0
+      // For Cash assets, use acquisitionCost as the value
+      const assetValue = asset.type === 'cash' ? (parseFloat(String(asset.acquisitionCost || 0))) : (asset.value || 0)
       
       let convertedValue = assetValue
       let convertedPrincipal = asset.principal || 0
@@ -106,12 +107,13 @@ const convertAssetValues = async (assets: any[], targetCurrency: string = 'USD',
       })
     } catch (error) {
       console.error('Failed to convert asset:', error)
+      const fallbackValue = asset.type === 'cash' ? (parseFloat(String(asset.acquisitionCost || 0))) : (asset.value || 0)
       results.push({
         ...asset,
-        convertedValue: asset.value || 0,
+        convertedValue: fallbackValue,
         amountPerPeriod: parseFloat(String(asset.amountPerPeriod || 0)),
         monthlyEquivalent: parseFloat(String(asset.monthlyEquivalent || 0)),
-        originalValue: asset.value || 0,
+        originalValue: fallbackValue,
         originalPrincipal: asset.principal || 0,
         originalGain: asset.gain || 0,
         originalAmountPerPeriod: parseFloat(String(asset.amountPerPeriod || 0)),
@@ -489,6 +491,53 @@ function AssetCard({
                   </span>
                   <span className="text-sm text-foreground">
                     {formatCurrencyWithSymbol(getDisplayValue(asset), displayCurrency)}
+                  </span>
+                </div>
+              </>
+            )}
+
+            {asset.type === 'cash' && (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    Cash Amount
+                  </span>
+                  <CurrencyTooltip
+                    originalAmount={assetAny.originalValue || getDisplayValue(asset)}
+                    originalCurrency={assetAny.originalCurrency || asset.currency || displayCurrency}
+                    convertedAmount={getDisplayValue(asset)}
+                    convertedCurrency={displayCurrency}
+                  >
+                    <span className="text-sm text-foreground font-medium">
+                      {formatCurrencyWithSymbol(getDisplayValue(asset), displayCurrency)}
+                    </span>
+                  </CurrencyTooltip>
+                </div>
+                {asset.purchaseDate && (
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground flex items-center gap-1">
+                      <Calendar className="h-3 w-3" />
+                      Date Added
+                    </span>
+                    <span className="text-sm text-foreground">
+                      {new Date(asset.purchaseDate).toLocaleDateString()}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    Cash Currency
+                  </span>
+                  <span className="text-sm text-foreground font-medium">
+                    {asset.currency || 'USD'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    Liquidity
+                  </span>
+                  <span className="text-sm text-green-600 font-medium">
+                    Immediate
                   </span>
                 </div>
               </>
@@ -1054,6 +1103,20 @@ function Assets() {
             // Store original amounts for currency conversion
             originalAmountPerPeriod: monthlyAmount,
             originalMonthlyEquivalent: monthlyEquivalent
+          }
+        }
+        
+        // Process cash assets - set value from acquisitionCost
+        if (asset.type === 'cash') {
+          const cashValue = parseFloat(String(asset.acquisitionCost || 0))
+          
+          console.log(`Processing cash asset ${asset.name}: acquisitionCost=${asset.acquisitionCost}, value=${cashValue}`)
+          
+          return {
+            ...asset,
+            value: cashValue,
+            gain: 0, // Cash doesn't gain/lose value inherently
+            gainPercent: 0
           }
         }
         

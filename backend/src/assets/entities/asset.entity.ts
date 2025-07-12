@@ -197,6 +197,10 @@ export class Asset {
       return this.currentPrice * this.weight;
     }
     
+    if (this.type === AssetType.CASH && this.acquisitionCost) {
+      return this.acquisitionCost;
+    }
+    
     return this.purchasePrice * this.quantity || 0;
   }
 

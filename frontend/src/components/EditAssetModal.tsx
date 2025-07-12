@@ -44,7 +44,11 @@ const currencies = [
   { code: 'RUB', name: 'Russian Ruble', symbol: '₽' },
   { code: 'INR', name: 'Indian Rupee', symbol: '₹' },
   { code: 'AMD', name: 'Armenian Dram', symbol: '֏' },
-  { code: 'GEL', name: 'Georgian Lari', symbol: '₾' }
+  { code: 'GEL', name: 'Georgian Lari', symbol: '₾' },
+  { code: 'XAU', name: 'Gold (Troy Ounce)', symbol: 'Au' },
+  { code: 'XAG', name: 'Silver (Troy Ounce)', symbol: 'Ag' },
+  { code: 'XPT', name: 'Platinum (Troy Ounce)', symbol: 'Pt' },
+  { code: 'XPD', name: 'Palladium (Troy Ounce)', symbol: 'Pd' }
 ]
 
 export function EditAssetModal({ isOpen, onClose, onUpdate, asset }: EditAssetModalProps) {
