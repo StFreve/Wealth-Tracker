@@ -37,6 +37,35 @@ export class User {
     timezone?: string;
     dateFormat?: string;
     numberFormat?: string;
+    taxSettings?: {
+      stock?: {
+        capitalGainsTax?: number;
+        dividendTax?: number;
+      };
+      deposit?: {
+        interestTax?: number;
+      };
+      preciousMetal?: {
+        capitalGainsTax?: number;
+      };
+      recurringIncome?: {
+        incomeTax?: number;
+      };
+      crypto?: {
+        capitalGainsTax?: number;
+      };
+      realEstate?: {
+        capitalGainsTax?: number;
+        rentalIncomeTax?: number;
+      };
+      bonds?: {
+        interestTax?: number;
+        capitalGainsTax?: number;
+      };
+      cash?: {
+        interestTax?: number;
+      };
+    };
   };
 
   @Column({ default: true })

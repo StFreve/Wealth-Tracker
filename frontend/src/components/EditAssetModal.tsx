@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { X, Plus, RefreshCw, TrendingUp, TrendingDown, Calendar, Calculator, Info, Settings } from 'lucide-react'
+import { X, Save, RefreshCw, TrendingUp, TrendingDown, Calendar, Calculator, Info, Settings } from 'lucide-react'
 import { Button } from './ui/Button'
 import { Card } from './ui/Card'
 import { Input } from './ui/Input'
+import { Asset } from '../lib/api/assetsApi'
 import { useBackendStockPrice } from '../hooks/useBackendStockPrice'
 import { formatStockPrice, formatStockPriceChange, isValidStockSymbol } from '../lib/api/marketDataApi'
 import { 
@@ -16,11 +17,11 @@ import {
 } from '../lib/depositCalculations'
 import { handleNumberInputChange, formatNumberForInput, parseFormattedNumber } from '../lib/numberFormat'
 
-interface AddAssetModalProps {
+interface EditAssetModalProps {
   isOpen: boolean
   onClose: () => void
-  onAdd: (asset: any) => void
-  initialData?: any
+  onUpdate: (asset: Asset) => void
+  asset: Asset | null
 }
 
 const assetTypes = [
@@ -46,7 +47,7 @@ const currencies = [
   { code: 'GEL', name: 'Georgian Lari', symbol: '₾' }
 ]
 
-export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetModalProps) {
+export function EditAssetModal({ isOpen, onClose, onUpdate, asset }: EditAssetModalProps) {
   const { t } = useTranslation()
   const [assetType, setAssetType] = useState('stock')
   const [currency, setCurrency] = useState('USD')
@@ -72,9 +73,16 @@ export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetM
     amount: ''
   })
   
-  // Initialize form with copied asset data when provided
+  // Stock price fetching for dynamic pricing
+  const [stockSymbol, setStockSymbol] = useState<string | null>(null)
+  const { stockPrice, isLoading: isLoadingPrice, error: priceError, refetch: refetchPrice } = useBackendStockPrice(stockSymbol)
+  
+  // Load asset data when modal opens
   useEffect(() => {
-    if (initialData && isOpen) {
+    if (asset && isOpen) {
+      setAssetType(asset.type)
+      setCurrency(asset.currency)
+      
       // Format dates for HTML date inputs (YYYY-MM-DD)
       const formatDateForInput = (dateString: string) => {
         if (!dateString) return ''
@@ -83,60 +91,29 @@ export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetM
         return date.toISOString().split('T')[0]
       }
       
-      setAssetType(initialData.type)
-      setCurrency(initialData.currency || 'USD')
       setFormData({
-        name: `Copy of ${initialData.name}`,
-        ticker: initialData.ticker || initialData.symbol || '',
-        quantity: formatNumberForInput(initialData.quantity || 0),
-        purchasePrice: formatNumberForInput(initialData.purchasePrice || 0),
-        currentPrice: formatNumberForInput(initialData.currentPrice || 0),
-        principal: formatNumberForInput(initialData.originalPrincipal || initialData.principal || 0),
-        rate: formatNumberForInput(initialData.rate || initialData.interestRate || 0),
-        startDate: formatDateForInput(initialData.startDate || ''),
-        maturityDate: formatDateForInput(initialData.maturityDate || initialData.endDate || ''),
-        compoundingFrequency: initialData.compoundingFrequency || initialData.interestSchedule || 'annually',
-        interestType: initialData.interestType || initialData.compounding || 'compound',
-        progressiveRates: initialData.progressiveRates ? JSON.stringify(initialData.progressiveRates) : JSON.stringify(getDefaultProgressiveRates()),
-        variableRates: initialData.variableRates ? JSON.stringify(initialData.variableRates) : '',
-        tieredRates: initialData.tieredRates ? JSON.stringify(initialData.tieredRates) : JSON.stringify(getDefaultTieredRates()),
-        weight: formatNumberForInput(initialData.weight || 0),
-        purity: formatNumberForInput(initialData.purity || 0),
-        monthlyAmount: formatNumberForInput(initialData.monthlyAmount || initialData.amountPerPeriod || 0),
-        frequency: initialData.frequency || 'monthly',
-        amount: formatNumberForInput(initialData.value || 0)
-      })
-    } else if (!initialData && isOpen) {
-      // Reset form when not copying
-      setAssetType('stock')
-      setCurrency('USD')
-      setFormData({
-        name: '',
-        ticker: '',
-        quantity: '',
-        purchasePrice: '',
-        currentPrice: '',
-        principal: '',
-        rate: '',
-        startDate: '',
-        maturityDate: '',
-        compoundingFrequency: 'annually',
-        interestType: 'compound',
-        progressiveRates: JSON.stringify(getDefaultProgressiveRates()),
-        variableRates: '',
-        tieredRates: JSON.stringify(getDefaultTieredRates()),
-        weight: '',
-        purity: '',
-        monthlyAmount: '',
-        frequency: 'monthly',
-        amount: ''
+        name: asset.name || '',
+        ticker: asset.ticker || asset.symbol || '',
+        quantity: formatNumberForInput(asset.quantity || 0),
+        purchasePrice: formatNumberForInput(asset.purchasePrice || 0),
+        currentPrice: formatNumberForInput(asset.currentPrice || 0),
+        principal: formatNumberForInput(asset.principal || 0),
+        rate: formatNumberForInput(asset.rate || asset.interestRate || 0),
+        startDate: formatDateForInput(asset.startDate || ''),
+        maturityDate: formatDateForInput(asset.maturityDate || asset.endDate || ''),
+        compoundingFrequency: asset.compoundingFrequency || asset.interestSchedule || 'annually',
+        interestType: asset.interestType || asset.compounding || 'compound',
+        progressiveRates: JSON.stringify(asset.progressiveRates || getDefaultProgressiveRates()),
+        variableRates: JSON.stringify(asset.variableRates || ''),
+        tieredRates: JSON.stringify(asset.tieredRates || getDefaultTieredRates()),
+        weight: formatNumberForInput(asset.weight || 0),
+        purity: formatNumberForInput(asset.purity || 0),
+        monthlyAmount: formatNumberForInput(asset.monthlyAmount || asset.amountPerPeriod || 0),
+        frequency: asset.frequency || 'monthly',
+        amount: formatNumberForInput(asset.value || 0)
       })
     }
-  }, [initialData, isOpen])
-  
-  // Stock price fetching for dynamic pricing
-  const [stockSymbol, setStockSymbol] = useState<string | null>(null)
-  const { stockPrice, isLoading: isLoadingPrice, error: priceError, refetch: refetchPrice } = useBackendStockPrice(stockSymbol)
+  }, [asset, isOpen])
   
   // Update stock symbol when ticker changes
   useEffect(() => {
@@ -150,16 +127,6 @@ export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetM
       setStockSymbol(null)
     }
   }, [formData.ticker, assetType])
-  
-  // Auto-populate asset name from ticker
-  useEffect(() => {
-    if (stockPrice && !formData.name) {
-      setFormData(prev => ({
-        ...prev,
-        name: `${stockPrice.symbol} Stock`
-      }))
-    }
-  }, [stockPrice, formData.name])
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({
@@ -180,28 +147,30 @@ export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetM
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
+    if (!asset) return
+    
     // Validate stock ticker if it's a stock
     if (assetType === 'stock' && !isValidStockSymbol(formData.ticker)) {
       alert(t('addAssetModal.invalidTicker'))
       return
     }
     
-    // Create asset object based on type
-    const baseAsset = {
+    // Create updated asset object based on type
+    const baseAsset: Partial<Asset> = {
       type: assetType,
       currency: currency,
       name: formData.name,
-      date: new Date().toISOString().split('T')[0]
     }
 
-    let asset
+    let updatedAsset
     switch (assetType) {
       case 'stock':
         const currentPrice = stockPrice?.price || parseFormattedNumber(formData.purchasePrice)
         const quantity = parseFormattedNumber(formData.quantity)
-        asset = {
+        updatedAsset = {
           ...baseAsset,
           ticker: formData.ticker,
+          symbol: formData.ticker,
           quantity: quantity,
           purchasePrice: parseFormattedNumber(formData.purchasePrice),
           currentPrice: currentPrice,
@@ -239,9 +208,12 @@ export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetM
           }
         }
         
+        const principal = parseFormattedNumber(formData.principal)
+        const rate = parseFormattedNumber(formData.rate)
+        
         const depositInfo = {
-          principal: parseFormattedNumber(formData.principal),
-          rate: parseFormattedNumber(formData.rate),
+          principal,
+          rate,
           startDate: formData.startDate,
           maturityDate: formData.maturityDate || undefined,
           compoundingFrequency: formData.compoundingFrequency as 'daily' | 'monthly' | 'quarterly' | 'annually',
@@ -252,12 +224,22 @@ export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetM
         }
         const depositValue = calculateDepositValue(depositInfo)
         
-        asset = {
+        // Debug logging for deposit update
+        console.log('EditAssetModal deposit form data:', {
+          compoundingFrequency: formData.compoundingFrequency,
+          interestType: formData.interestType,
+          startDate: formData.startDate,
+          maturityDate: formData.maturityDate
+        })
+        
+        updatedAsset = {
           ...baseAsset,
-          principal: parseFormattedNumber(formData.principal),
-          rate: parseFormattedNumber(formData.rate),
+          principal,
+          rate,
+          interestRate: rate,
           startDate: formData.startDate,
           maturityDate: formData.maturityDate,
+          endDate: formData.maturityDate,
           compoundingFrequency: formData.compoundingFrequency,
           interestType: formData.interestType,
           progressiveRates,
@@ -274,69 +256,48 @@ export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetM
       case 'preciousMetal':
         const weight = parseFormattedNumber(formData.weight)
         const pricePerUnit = parseFormattedNumber(formData.currentPrice)
-        asset = {
+        updatedAsset = {
           ...baseAsset,
-          weight: weight,
+          weight,
           purity: parseFormattedNumber(formData.purity),
           currentPrice: pricePerUnit,
-          value: weight * pricePerUnit
+          value: weight * pricePerUnit,
+          metalType: 'gold' // Default, could be configurable
         }
         break
       case 'recurringIncome':
         const monthlyAmount = parseFormattedNumber(formData.monthlyAmount)
-        asset = {
+        updatedAsset = {
           ...baseAsset,
-          monthlyAmount: monthlyAmount,
+          monthlyAmount,
+          amountPerPeriod: monthlyAmount,
           frequency: formData.frequency,
           value: monthlyAmount * 12 // Annualized value
         }
         break
       case 'cash':
-        asset = {
+        updatedAsset = {
           ...baseAsset,
           value: parseFormattedNumber(formData.amount)
         }
         break
       default:
-        asset = baseAsset
+        updatedAsset = baseAsset
     }
 
-    // Calculate gain (placeholder for now)
-    const assetWithGain = {
+    // Calculate gain (this might need to be more sophisticated)
+    const finalAsset = {
       ...asset,
-      gain: (asset as any).value * 0.05, // 5% placeholder gain
-      gainPercent: 5
+      ...updatedAsset,
+      id: asset.id, // Keep original ID
+      updatedAt: new Date().toISOString()
     }
 
-    onAdd(assetWithGain)
+    onUpdate(finalAsset)
     onClose()
-    
-    // Reset form
-    setFormData({
-      name: '',
-      ticker: '',
-      quantity: '',
-      purchasePrice: '',
-      currentPrice: '',
-      principal: '',
-      rate: '',
-      startDate: '',
-      maturityDate: '',
-      compoundingFrequency: 'annually',
-      interestType: 'compound',
-      progressiveRates: JSON.stringify(getDefaultProgressiveRates()),
-      variableRates: '',
-      tieredRates: JSON.stringify(getDefaultTieredRates()),
-      weight: '',
-      purity: '',
-      monthlyAmount: '',
-      frequency: 'monthly',
-      amount: ''
-    })
-    setStockSymbol(null)
   }
 
-  if (!isOpen) return null
+  if (!isOpen || !asset) return null
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -344,7 +305,7 @@ export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetM
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-foreground">
-              {t('addAssetModal.title')}
+              {t('assets.editAsset')}
             </h2>
             <Button variant="ghost" size="sm" onClick={onClose}>
               <X className="h-4 w-4" />
@@ -433,6 +394,7 @@ export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetM
                       Supports stocks (AAPL, MSFT) and ETFs (VOO, IWF, SPY)
                     </p>
                   </div>
+                  
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
                       {t('addAssetModal.quantity')}
@@ -445,10 +407,11 @@ export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetM
                     />
                   </div>
                 </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
-                      {t('addAssetModal.purchasePrice')} ({currency})
+                      {t('addAssetModal.purchasePrice')}
                     </label>
                     <Input
                       value={formData.purchasePrice}
@@ -457,85 +420,30 @@ export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetM
                       required
                     />
                   </div>
+                  
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
                       {t('addAssetModal.currentPrice')}
                     </label>
-                    <div className="border border-input rounded-md bg-background p-3 min-h-[40px] flex items-center justify-between">
-                      {formData.ticker && isValidStockSymbol(formData.ticker) ? (
-                        <div className="flex items-center gap-2 flex-1">
-                          {isLoadingPrice ? (
-                            <div className="flex items-center gap-2">
-                              <RefreshCw className="h-4 w-4 animate-spin" />
-                              <span className="text-sm text-muted-foreground">{t('addAssetModal.fetchingPrice')}</span>
-                            </div>
-                          ) : stockPrice ? (
-                            <div className="flex items-center gap-2 flex-1">
-                              <div className="flex items-center gap-1">
-                                <span className="font-medium">{formatStockPrice(stockPrice)}</span>
-                                {stockPrice.changePercent && (
-                                  <span className={`text-xs flex items-center gap-1 ${
-                                    stockPrice.changePercent >= 0 ? 'text-green-600' : 'text-red-600'
-                                  }`}>
-                                    {stockPrice.changePercent >= 0 ? 
-                                      <TrendingUp className="h-3 w-3" /> : 
-                                      <TrendingDown className="h-3 w-3" />
-                                    }
-                                    {formatStockPriceChange(stockPrice)}
-                                  </span>
-                                )}
-                              </div>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={refetchPrice}
-                                className="h-6 w-6 p-0"
-                              >
-                                <RefreshCw className="h-3 w-3" />
-                              </Button>
-                            </div>
-                                                     ) : priceError ? (
-                             <div className="flex items-center justify-between w-full">
-                               <div className="flex flex-col">
-                                 <span className="text-sm text-red-600">
-                                   {t('addAssetModal.failedToFetchPrice')}
-                                 </span>
-                                 <span className="text-xs text-muted-foreground">
-                                   {t('addAssetModal.willUsePurchasePrice')}
-                                 </span>
-                               </div>
-                               <Button
-                                 type="button"
-                                 variant="ghost"
-                                 size="sm"
-                                 onClick={refetchPrice}
-                                 className="h-6 w-6 p-0"
-                               >
-                                 <RefreshCw className="h-3 w-3" />
-                               </Button>
-                             </div>
-                           ) : (
-                            <span className="text-sm text-muted-foreground">
-                              {t('addAssetModal.enterValidTicker')}
-                            </span>
-                          )}
+                    <div className="relative">
+                      <Input
+                        value={stockPrice ? formatNumberForInput(stockPrice.price) : formData.currentPrice}
+                        onChange={(e) => handleNumberInput('currentPrice', e.target.value)}
+                        placeholder={t('addAssetModal.currentPrice')}
+                        disabled={isLoadingPrice}
+                        className={stockPrice ? 'bg-green-50 border-green-300' : ''}
+                      />
+                      {isLoadingPrice && (
+                        <div className="absolute right-2 top-2">
+                          <RefreshCw className="h-4 w-4 animate-spin text-blue-500" />
                         </div>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">
-                          {t('addAssetModal.enterTickerToGetPrice')}
-                        </span>
                       )}
                     </div>
-                                         <p className="text-xs text-muted-foreground mt-1">
-                       {stockPrice ? (
-                         <span>
-                           {t('addAssetModal.priceFrom')} {stockPrice.source} • {t('addAssetModal.updated')} {new Date(stockPrice.timestamp).toLocaleTimeString()}
-                         </span>
-                       ) : (
-                         t('addAssetModal.priceWillBeFetched')
-                       )}
-                     </p>
+                    {stockPrice && (
+                      <div className="text-xs text-green-600 mt-1">
+                        {t('addAssetModal.priceFrom')} {stockPrice.source} ({t('addAssetModal.updated')}: {new Date(stockPrice.timestamp).toLocaleTimeString()})
+                      </div>
+                    )}
                   </div>
                 </div>
               </>
@@ -546,7 +454,7 @@ export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetM
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
-                      {t('addAssetModal.principalAmount')} ({currency})
+                      {t('addAssetModal.principalAmount')}
                     </label>
                     <Input
                       value={formData.principal}
@@ -555,6 +463,7 @@ export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetM
                       required
                     />
                   </div>
+                  
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
                       {t('addAssetModal.interestRate')}
@@ -567,7 +476,7 @@ export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetM
                     />
                   </div>
                 </div>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
@@ -580,10 +489,8 @@ export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetM
                       onChange={(e) => handleInputChange('startDate', e.target.value)}
                       required
                     />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {t('addAssetModal.startDateHelp')}
-                    </p>
                   </div>
+                  
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
                       <Settings className="inline h-4 w-4 mr-1" />
@@ -600,9 +507,6 @@ export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetM
                       <option value="variable">{t('addAssetModal.interestTypes.variable')}</option>
                       <option value="tiered">{t('addAssetModal.interestTypes.tiered')}</option>
                     </select>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {getInterestTypeInfo(formData.interestType).description}
-                    </p>
                   </div>
                 </div>
                 
@@ -624,172 +528,16 @@ export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetM
                   </div>
                 )}
                 
-                {/* Progressive Rates Configuration */}
-                {formData.interestType === 'progressive' && (
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-1">
-                      <Info className="inline h-4 w-4 mr-1" />
-                      {t('addAssetModal.progressiveRateSchedule')}
-                    </label>
-                    <textarea
-                      value={formData.progressiveRates}
-                      onChange={(e) => handleInputChange('progressiveRates', e.target.value)}
-                      className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm font-mono"
-                      rows={4}
-                      placeholder={t('addAssetModal.progressiveRatePlaceholder')}
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {t('addAssetModal.progressiveRateExample')}
-                    </p>
-                  </div>
-                )}
-                
-                {/* Variable Rates Configuration */}
-                {formData.interestType === 'variable' && (
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-1">
-                      <Info className="inline h-4 w-4 mr-1" />
-                      {t('addAssetModal.variableRateSchedule')}
-                    </label>
-                    <textarea
-                      value={formData.variableRates}
-                      onChange={(e) => handleInputChange('variableRates', e.target.value)}
-                      className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm font-mono"
-                      rows={4}
-                      placeholder={t('addAssetModal.variableRatePlaceholder')}
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {t('addAssetModal.variableRateExample')}
-                    </p>
-                  </div>
-                )}
-                
-                {/* Tiered Rates Configuration */}
-                {formData.interestType === 'tiered' && (
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-1">
-                      <Info className="inline h-4 w-4 mr-1" />
-                      {t('addAssetModal.tieredRateStructure')}
-                    </label>
-                    <textarea
-                      value={formData.tieredRates}
-                      onChange={(e) => handleInputChange('tieredRates', e.target.value)}
-                      className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm font-mono"
-                      rows={4}
-                      placeholder={t('addAssetModal.tieredRatePlaceholder')}
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {t('addAssetModal.tieredRateExample')}
-                    </p>
-                  </div>
-                )}
-                
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">
-                    {t('addAssetModal.maturityDate')}
+                    {t('addAssetModal.maturityDate')} ({t('common.optional')})
                   </label>
                   <Input
                     type="date"
                     value={formData.maturityDate}
                     onChange={(e) => handleInputChange('maturityDate', e.target.value)}
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {t('addAssetModal.maturityDateHelp')}
-                  </p>
                 </div>
-                
-                {/* Deposit Preview */}
-                {formData.principal && formData.rate && formData.startDate && (
-                  <div className="bg-muted/50 p-4 rounded-lg border">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Calculator className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">{t('addAssetModal.depositPreview')}</span>
-                      <span className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded">
-                        {getInterestTypeInfo(formData.interestType).name}
-                      </span>
-                    </div>
-                    {(() => {
-                      let progressiveRates = undefined
-                      let variableRates = undefined
-                      let tieredRates = undefined
-                      
-                      // Parse additional rate data for preview
-                      if (formData.interestType === 'progressive' && formData.progressiveRates) {
-                        try {
-                          progressiveRates = JSON.parse(formData.progressiveRates)
-                        } catch (e) {
-                          // Ignore parse errors in preview
-                        }
-                      }
-                      
-                      if (formData.interestType === 'variable' && formData.variableRates) {
-                        try {
-                          variableRates = JSON.parse(formData.variableRates)
-                        } catch (e) {
-                          // Ignore parse errors in preview
-                        }
-                      }
-                      
-                      if (formData.interestType === 'tiered' && formData.tieredRates) {
-                        try {
-                          tieredRates = JSON.parse(formData.tieredRates)
-                        } catch (e) {
-                          // Ignore parse errors in preview
-                        }
-                      }
-                      
-                      const depositInfo = {
-                        principal: parseFloat(formData.principal) || 0,
-                        rate: parseFloat(formData.rate) || 0,
-                        startDate: formData.startDate,
-                        maturityDate: formData.maturityDate || undefined,
-                        compoundingFrequency: formData.compoundingFrequency as 'daily' | 'monthly' | 'quarterly' | 'annually',
-                        interestType: formData.interestType as 'simple' | 'compound' | 'progressive' | 'variable' | 'tiered',
-                        progressiveRates,
-                        variableRates,
-                        tieredRates
-                      }
-                      const depositValue = calculateDepositValue(depositInfo)
-                      
-                      return (
-                        <div className="space-y-2 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">{t('addAssetModal.principal')}:</span>
-                            <span className="font-medium">{currency} {formData.principal}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">{t('addAssetModal.interestType')}:</span>
-                            <span className="font-medium">{getInterestTypeInfo(formData.interestType).name}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">{t('addAssetModal.duration')}:</span>
-                            <span className="font-medium">{formatDepositDuration(depositValue)}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">{t('addAssetModal.interestEarned')}:</span>
-                            <span className="font-medium text-green-600">
-                              {currency} {depositValue.accruedInterest.toFixed(2)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between border-t pt-2">
-                            <span className="text-muted-foreground">{t('addAssetModal.currentValue')}:</span>
-                            <span className="font-bold text-lg">
-                              {currency} {depositValue.currentValue.toFixed(2)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">{t('addAssetModal.status')}:</span>
-                            <span className={`font-medium ${
-                              depositValue.isMatured ? 'text-blue-600' : 'text-green-600'
-                            }`}>
-                              {getDepositStatus(depositValue)}
-                            </span>
-                          </div>
-                        </div>
-                      )
-                    })()}
-                  </div>
-                )}
               </>
             )}
 
@@ -798,35 +546,37 @@ export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetM
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
-                      {t('addAssetModal.weightOz')}
+                      {t('addAssetModal.weight')}
                     </label>
                     <Input
                       value={formData.weight}
                       onChange={(e) => handleNumberInput('weight', e.target.value)}
-                      placeholder={t('addAssetModal.weightPlaceholder')}
+                      placeholder="10.5"
                       required
                     />
                   </div>
+                  
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
-                      {t('addAssetModal.purityPercent')}
+                      {t('addAssetModal.purity')}
                     </label>
                     <Input
                       value={formData.purity}
                       onChange={(e) => handleNumberInput('purity', e.target.value)}
-                      placeholder={t('addAssetModal.purityPlaceholder')}
+                      placeholder="99.9"
                       required
                     />
                   </div>
                 </div>
+
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">
-                    {t('addAssetModal.currentPricePerOz')} ({currency})
+                    {t('addAssetModal.currentPrice')}
                   </label>
                   <Input
                     value={formData.currentPrice}
                     onChange={(e) => handleNumberInput('currentPrice', e.target.value)}
-                    placeholder={t('addAssetModal.currentPricePlaceholder')}
+                    placeholder="2,000.00"
                     required
                   />
                 </div>
@@ -838,15 +588,16 @@ export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetM
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
-                      {t('addAssetModal.monthlyAmount')} ({currency})
+                      {t('addAssetModal.monthlyAmount')}
                     </label>
                     <Input
                       value={formData.monthlyAmount}
                       onChange={(e) => handleNumberInput('monthlyAmount', e.target.value)}
-                      placeholder={t('addAssetModal.monthlyAmountPlaceholder')}
+                      placeholder="2,500.00"
                       required
                     />
                   </div>
+                  
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
                       {t('addAssetModal.frequency')}
@@ -856,9 +607,10 @@ export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetM
                       onChange={(e) => handleInputChange('frequency', e.target.value)}
                       className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                     >
-                      <option value="monthly">{t('addAssetModal.frequencies.monthly')}</option>
-                      <option value="quarterly">{t('addAssetModal.frequencies.quarterly')}</option>
-                      <option value="yearly">{t('addAssetModal.frequencies.yearly')}</option>
+                      <option value="weekly">{t('addAssetModal.weekly')}</option>
+                      <option value="monthly">{t('addAssetModal.monthly')}</option>
+                      <option value="quarterly">{t('addAssetModal.quarterly')}</option>
+                      <option value="annually">{t('addAssetModal.annually')}</option>
                     </select>
                   </div>
                 </div>
@@ -868,25 +620,25 @@ export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetM
             {assetType === 'cash' && (
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  {t('addAssetModal.amount')} ({currency})
+                  {t('addAssetModal.amount')}
                 </label>
                 <Input
                   value={formData.amount}
                   onChange={(e) => handleNumberInput('amount', e.target.value)}
-                  placeholder={t('addAssetModal.amountPlaceholder')}
+                  placeholder="10,000.00"
                   required
                 />
               </div>
             )}
 
-            {/* Form Actions */}
+            {/* Action Buttons */}
             <div className="flex justify-end space-x-4 pt-4">
               <Button type="button" variant="outline" onClick={onClose}>
                 {t('addAssetModal.cancel')}
               </Button>
               <Button type="submit" className="flex items-center space-x-2">
-                <Plus className="h-4 w-4" />
-                <span>{t('addAssetModal.addAsset')}</span>
+                <Save className="h-4 w-4" />
+                <span>{t('assets.assetUpdated')}</span>
               </Button>
             </div>
           </form>

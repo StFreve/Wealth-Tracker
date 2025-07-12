@@ -67,7 +67,36 @@ export class AuthService {
       preferences: {
         language: 'en',
         currency: 'USD',
-        theme: 'system'
+        theme: 'system',
+        taxSettings: {
+          stock: {
+            capitalGainsTax: 0,
+            dividendTax: 0,
+          },
+          deposit: {
+            interestTax: 0,
+          },
+          preciousMetal: {
+            capitalGainsTax: 0,
+          },
+          recurringIncome: {
+            incomeTax: 0,
+          },
+          crypto: {
+            capitalGainsTax: 0,
+          },
+          realEstate: {
+            capitalGainsTax: 0,
+            rentalIncomeTax: 0,
+          },
+          bonds: {
+            interestTax: 0,
+            capitalGainsTax: 0,
+          },
+          cash: {
+            interestTax: 0,
+          },
+        },
       }
     });
 

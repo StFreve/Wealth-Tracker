@@ -5,6 +5,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { CurrencyStatus } from '../components/CurrencyStatus';
+import { CURRENCIES } from '@/lib/currency';
+import { useBackendCurrencyRates } from '@/hooks/useBackendCurrencyRates';
 import { 
   TrendingUpIcon, 
   DollarSignIcon, 
@@ -14,7 +16,50 @@ import {
   ArrowDownIcon,
   RefreshCw
 } from 'lucide-react';
-import { convertAssetValues, formatCurrency as formatCurrencyWithSymbol, CURRENCIES } from '@/lib/currency';
+
+// Backend currency functions
+const formatCurrencyWithSymbol = (amount: number, currency: string = 'USD') => {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency
+  }).format(amount)
+}
+
+const convertAssetValues = async (assets: any[], targetCurrency: string = 'USD', convertAmount: (amount: number, from: string, to: string) => Promise<number>) => {
+  const results: any[] = []
+  
+  for (const asset of assets) {
+    try {
+      const assetCurrency = asset.currency || 'USD'
+      const assetValue = asset.value || 0
+      
+      let convertedValue = assetValue
+      
+      if (assetCurrency !== targetCurrency) {
+        convertedValue = await convertAmount(assetValue, assetCurrency, targetCurrency)
+      }
+      
+      results.push({
+        ...asset,
+        convertedValue,
+        originalValue: assetValue,
+        originalCurrency: assetCurrency,
+        targetCurrency
+      })
+    } catch (error) {
+      console.error('Failed to convert asset:', error)
+      results.push({
+        ...asset,
+        convertedValue: asset.value || 0,
+        originalValue: asset.value || 0,
+        originalCurrency: asset.currency || 'USD',
+        targetCurrency
+      })
+    }
+  }
+  
+  return results
+}
 
 // Mock data for demonstration - now with currency support
 const mockPortfolioData = {
@@ -66,6 +111,9 @@ export default function Dashboard() {
   const [displayCurrency, setDisplayCurrency] = useState('USD');
   const [convertedData, setConvertedData] = useState<any>(mockPortfolioData);
   const [isConverting, setIsConverting] = useState(false);
+  
+  // Use backend currency rates hook
+  const { convertAmount } = useBackendCurrencyRates();
 
   const formatCurrency = (amount: number) => {
     return formatCurrencyWithSymbol(amount, displayCurrency);
@@ -94,7 +142,7 @@ export default function Dashboard() {
     navigate('/settings');
   };
 
-  // Currency conversion
+  // Currency conversion using backend API
   const updateDisplayCurrency = async (currency: string) => {
     setIsConverting(true);
     try {
@@ -104,7 +152,8 @@ export default function Dashboard() {
           ...item, 
           value: item.value 
         })), 
-        currency
+        currency,
+        convertAmount
       );
 
       // Convert transactions
@@ -113,7 +162,8 @@ export default function Dashboard() {
           ...transaction,
           value: transaction.amount
         })),
-        currency
+        currency,
+        convertAmount
       );
 
       // Convert main portfolio values (assuming they're in USD base)
@@ -123,7 +173,7 @@ export default function Dashboard() {
         { value: mockPortfolioData.yearlyChange, currency: 'USD' }
       ];
 
-      const convertedPortfolioValues = await convertAssetValues(portfolioValues, currency);
+      const convertedPortfolioValues = await convertAssetValues(portfolioValues, currency, convertAmount);
 
       setConvertedData({
         ...mockPortfolioData,

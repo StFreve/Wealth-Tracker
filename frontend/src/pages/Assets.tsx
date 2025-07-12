@@ -1,126 +1,839 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Plus, Edit, Trash2, TrendingUp, TrendingDown, RefreshCw, Calendar, Clock } from 'lucide-react'
-import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
+import { Button } from '@/components/ui/Button'
 import { AddAssetModal } from '@/components/AddAssetModal'
+import { EditAssetModal } from '@/components/EditAssetModal'
 import { CurrencyStatus } from '@/components/CurrencyStatus'
+import { CURRENCIES } from '@/lib/currency'
+import { useBackendCurrencyRates } from '@/hooks/useBackendCurrencyRates'
+import { useBackendStockPrice } from '@/hooks/useBackendStockPrice'
+import { useAuth } from '@/contexts/AuthContext'
+import { assetsApi, Asset } from '@/lib/api/assetsApi'
+import { 
+  Plus, 
+  Edit, 
+  Trash2, 
+  TrendingUp, 
+  TrendingDown, 
+  RefreshCw,
+  Clock,
+  Calendar,
+  DollarSign,
+  Info,
+  AlertCircle,
+  Settings,
+  ChevronDown,
+  ChevronRight,
+  Copy
+} from 'lucide-react'
 import { formatCurrency, formatPercentage } from '@/lib/utils'
-import { convertAssetValues, formatCurrency as formatCurrencyWithSymbol, CURRENCIES } from '@/lib/currency'
 import { calculateDepositValue, formatDepositDuration, getDepositStatus, getInterestTypeInfo } from '@/lib/depositCalculations'
+import { calculateAfterTaxProfit } from '@/lib/taxCalculations'
+import { usersApi, TaxSettings } from '@/lib/api/usersApi'
 
-// Mock data - now with currency information
-const mockAssets = [
-  {
-    id: 1,
-    type: 'stock',
-    name: 'Apple Inc.',
-    ticker: 'AAPL',
-    quantity: 10,
-    purchasePrice: 150.00,
-    currentPrice: 175.50,
-    value: 1755.00,
-    currency: 'USD',
-    gain: 255.00,
-    gainPercent: 17.0,
-    date: '2024-01-15'
-  },
-  {
-    id: 2,
-    type: 'deposit',
-    name: 'High Yield Savings',
-    principal: 25000,
-    rate: 4.5,
-    startDate: '2023-12-01',
-    maturityDate: '2025-12-01',
-    compoundingFrequency: 'monthly',
-    interestType: 'compound',
-    value: 25562.50,
-    currency: 'EUR',
-    gain: 562.50,
-    gainPercent: 2.25,
-    date: '2023-12-01',
-    accruedInterest: 562.50,
-    daysElapsed: 45,
-    status: 'Active',
-    isMatured: false
+// Backend currency functions
+const formatCurrencyWithSymbol = (amount: number, currency: string = 'USD') => {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency
+  }).format(amount)
+}
+
+const convertAssetValues = async (assets: any[], targetCurrency: string = 'USD', convertAmount: (amount: number, from: string, to: string) => Promise<number>) => {
+  const results: any[] = []
+  
+  for (const asset of assets) {
+    try {
+      const assetCurrency = asset.currency || 'USD'
+      const assetValue = asset.value || 0
+      
+      let convertedValue = assetValue
+      let convertedPrincipal = asset.principal || 0
+      let convertedAccruedInterest = asset.accruedInterest || 0
+      let convertedGain = asset.gain || 0
+      
+      if (assetCurrency !== targetCurrency) {
+        // Only convert non-zero amounts to avoid API errors
+        if (assetValue > 0) {
+          convertedValue = await convertAmount(assetValue, assetCurrency, targetCurrency)
+        }
+        if (asset.principal && asset.principal > 0) {
+          convertedPrincipal = await convertAmount(asset.principal, assetCurrency, targetCurrency)
+        }
+        if (asset.accruedInterest && asset.accruedInterest > 0) {
+          convertedAccruedInterest = await convertAmount(asset.accruedInterest, assetCurrency, targetCurrency)
+        }
+        if (asset.gain && asset.gain !== 0) {
+          convertedGain = await convertAmount(Math.abs(asset.gain), assetCurrency, targetCurrency)
+          // Preserve the sign of the original gain
+          convertedGain = asset.gain < 0 ? -convertedGain : convertedGain
+        }
+      }
+      
+      results.push({
+        ...asset,
+        convertedValue,
+        principal: convertedPrincipal,
+        accruedInterest: convertedAccruedInterest,
+        gain: convertedGain,
+        originalValue: assetValue,
+        originalPrincipal: asset.principal || 0,
+        originalGain: asset.gain || 0,
+        originalCurrency: assetCurrency,
+        targetCurrency
+      })
+    } catch (error) {
+      console.error('Failed to convert asset:', error)
+      results.push({
+        ...asset,
+        convertedValue: asset.value || 0,
+        originalValue: asset.value || 0,
+        originalPrincipal: asset.principal || 0,
+        originalGain: asset.gain || 0,
+        originalCurrency: asset.currency || 'USD',
+        targetCurrency
+      })
+    }
   }
-]
+  
+  return results
+}
 
-export default function Assets() {
+// Currency Tooltip Component
+interface CurrencyTooltipProps {
+  children: React.ReactNode
+  originalAmount: number
+  originalCurrency: string
+  convertedAmount: number
+  convertedCurrency: string
+  exchangeRate?: number
+}
+
+function CurrencyTooltip({ children, originalAmount, originalCurrency, convertedAmount, convertedCurrency, exchangeRate }: CurrencyTooltipProps) {
+  const [showTooltip, setShowTooltip] = useState(false)
+  
+  if (originalCurrency === convertedCurrency) {
+    return <>{children}</>
+  }
+  
+  return (
+    <div 
+      className="relative inline-block"
+      onMouseEnter={() => setShowTooltip(true)}
+      onMouseLeave={() => setShowTooltip(false)}
+    >
+      {children}
+      {showTooltip && (
+        <div className="absolute z-10 px-3 py-2 text-sm bg-black text-white rounded-lg shadow-lg -top-12 left-1/2 transform -translate-x-1/2 whitespace-nowrap">
+          <div className="text-center">
+            <div>Original: {formatCurrencyWithSymbol(originalAmount, originalCurrency)}</div>
+            {exchangeRate && (
+              <div className="text-xs opacity-75">
+                1 {originalCurrency} = {exchangeRate.toFixed(4)} {convertedCurrency}
+              </div>
+            )}
+          </div>
+          <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-black"></div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Stock Price Display Component
+interface StockPriceDisplayProps {
+  ticker: string
+  quantity: number
+  displayCurrency: string
+}
+
+function StockPriceDisplay({ ticker, quantity, displayCurrency }: StockPriceDisplayProps) {
+  const { stockPrice, isLoading, error } = useBackendStockPrice(ticker)
+  
+  if (isLoading) {
+    return (
+      <div className="flex justify-between">
+        <span className="text-sm text-muted-foreground">Market Price</span>
+        <span className="text-sm text-muted-foreground">Loading...</span>
+      </div>
+    )
+  }
+  
+  if (error || !stockPrice) {
+    return (
+      <div className="flex justify-between">
+        <span className="text-sm text-muted-foreground">Market Price</span>
+        <span className="text-sm text-muted-foreground">N/A</span>
+      </div>
+    )
+  }
+  
+  const changeColor = stockPrice.change >= 0 ? 'text-green-600' : 'text-red-600'
+
+  return (
+    <>
+      <div className="flex justify-between">
+        <span className="text-sm text-muted-foreground">Market Price</span>
+        <div className="text-right">
+          <div className="text-sm text-foreground font-medium">
+            ${stockPrice.price.toFixed(2)}
+          </div>
+          <div className={`text-xs ${changeColor}`}>
+            {stockPrice.change >= 0 ? '+' : ''}${stockPrice.change.toFixed(2)} ({stockPrice.changePercent.toFixed(2)}%)
+          </div>
+        </div>
+      </div>
+      <div className="flex justify-between">
+        <span className="text-sm text-muted-foreground">Total Value</span>
+        <span className="text-sm text-foreground font-medium">
+          ${(stockPrice.price * quantity).toFixed(2)}
+        </span>
+      </div>
+    </>
+  )
+}
+
+// Enhanced Asset Card Component
+interface AssetCardProps {
+  asset: any
+  displayCurrency: string
+  onEdit: (id: string) => void
+  onDelete: (id: string) => void
+  onCopy: (asset: any) => void
+  t: any
+  formatCurrencyWithSymbol: (amount: number, currency: string) => string
+  getDisplayValue: (asset: any) => number
+  getDisplayGain: (asset: any) => number
+  formatPercentage: (value: number) => string
+  getInterestTypeInfo: (type: string) => any
+  formatDepositDuration: (duration: any) => string
+}
+
+function AssetCard({ 
+  asset, 
+  displayCurrency, 
+  onEdit, 
+  onDelete, 
+  onCopy,
+  t, 
+  formatCurrencyWithSymbol, 
+  getDisplayValue, 
+  getDisplayGain, 
+  formatPercentage, 
+  getInterestTypeInfo, 
+  formatDepositDuration 
+}: AssetCardProps) {
+  const { user } = useAuth()
+  const assetAny = asset as any
+  
+  // Calculate after-tax profit
+  const grossProfit = getDisplayGain(asset) // Already converted gain
+  
+  // Get original gain for tax calculation
+  const originalGain = assetAny.originalGain || assetAny.gain || grossProfit
+  
+  // Calculate tax on original gain, then convert to display currency
+  const originalTaxCalculation = calculateAfterTaxProfit(
+    asset.type,
+    asset.type === 'deposit' ? 'interest' : 'capital_gains',
+    originalGain,
+    user?.preferences?.taxSettings
+  )
+  
+  // If currency conversion was applied, convert tax amounts
+  let taxCalculation
+  if (assetAny.originalCurrency && assetAny.originalCurrency !== displayCurrency && originalGain !== 0) {
+    // Tax was calculated on original amount, so convert the tax and net amounts
+    const conversionRatio = grossProfit / originalGain
+    taxCalculation = {
+      grossProfit: grossProfit,
+      taxAmount: originalTaxCalculation.taxAmount * Math.abs(conversionRatio),
+      netProfit: originalTaxCalculation.netProfit * conversionRatio,
+      taxRate: originalTaxCalculation.taxRate
+    }
+  } else {
+    // No conversion needed
+    taxCalculation = {
+      grossProfit: grossProfit,
+      taxAmount: originalTaxCalculation.taxAmount,
+      netProfit: originalTaxCalculation.netProfit,
+      taxRate: originalTaxCalculation.taxRate
+    }
+  }
+  
+  return (
+    <Card className="asset-card">
+            <div className="p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h3 className="font-semibold text-lg text-foreground">
+                    {asset.name}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    {asset.type === 'stock' ? asset.ticker : t(`assets.${asset.type}`)}
+              {assetAny.originalCurrency && assetAny.originalCurrency !== displayCurrency && (
+                <span className="ml-2 text-xs bg-secondary px-1 rounded">
+                  from {assetAny.originalCurrency}
+                </span>
+              )}
+                  </p>
+                </div>
+                <div className="flex space-x-1">
+            <Button variant="ghost" size="sm" onClick={() => onEdit(asset.id)} title={t('common.edit')}>
+                    <Edit className="h-4 w-4" />
+                  </Button>
+            <Button variant="ghost" size="sm" onClick={() => onCopy(asset)} title={t('common.copy')}>
+              <Copy className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => onDelete(asset.id)} title={t('common.delete')}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">
+              {asset.type === 'deposit' ? t('assets.accountBalance') : t('assets.marketValue')}
+                  </span>
+            <CurrencyTooltip
+              originalAmount={assetAny.originalValue || getDisplayValue(asset)}
+              originalCurrency={assetAny.originalCurrency || asset.currency || displayCurrency}
+              convertedAmount={getDisplayValue(asset)}
+              convertedCurrency={displayCurrency}
+              exchangeRate={assetAny.originalCurrency !== displayCurrency ? getDisplayValue(asset) / (assetAny.originalValue || getDisplayValue(asset)) : undefined}
+            >
+                  <span className="font-medium text-foreground">
+                {formatCurrencyWithSymbol(getDisplayValue(asset), displayCurrency)}
+                  </span>
+            </CurrencyTooltip>
+                </div>
+
+                {asset.type === 'stock' && (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">
+                        {t('assets.quantity')}
+                      </span>
+                      <span className="text-sm text-foreground">
+                        {asset.quantity} shares
+                      </span>
+                    </div>
+              <StockPriceDisplay 
+                ticker={asset.ticker} 
+                quantity={asset.quantity} 
+                displayCurrency={displayCurrency}
+              />
+            </>
+          )}
+
+          {asset.type === 'deposit' && (
+            <>
+              <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">
+                  Principal
+                </span>
+                <CurrencyTooltip
+                  originalAmount={assetAny.originalValue || (asset.principal || 0)}
+                  originalCurrency={assetAny.originalCurrency || asset.currency || displayCurrency}
+                  convertedAmount={asset.principal || 0}
+                  convertedCurrency={displayCurrency}
+                >
+                  <span className="text-sm text-foreground">
+                    {formatCurrencyWithSymbol(asset.principal || 0, displayCurrency)}
+                  </span>
+                </CurrencyTooltip>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">
+                  Interest Rate
+                </span>
+                <span className="text-sm text-foreground">
+                  {(asset.rate || asset.interestRate || 0).toFixed(2)}% per year
+                </span>
+              </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">
+                  Interest Type
+                </span>
+                <span className="text-sm text-foreground font-medium">
+                  {getInterestTypeInfo(asset.interestType || asset.compounding || 'compound').name}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  Duration
+                      </span>
+                      <span className="text-sm text-foreground">
+                  {asset.startDate ? formatDepositDuration({
+                    daysElapsed: asset.daysElapsed || 0,
+                    monthsElapsed: Math.floor((asset.daysElapsed || 0) / 30),
+                    yearsElapsed: (asset.daysElapsed || 0) / 365,
+                    currentValue: 0,
+                    accruedInterest: 0,
+                    isMatured: asset.isMatured || false
+                  }) : '0 days'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">
+                  Interest Earned
+                </span>
+                <CurrencyTooltip
+                  originalAmount={assetAny.originalAccruedInterest || (asset.accruedInterest || 0)}
+                  originalCurrency={assetAny.originalCurrency || asset.currency || displayCurrency}
+                  convertedAmount={asset.accruedInterest || 0}
+                  convertedCurrency={displayCurrency}
+                >
+                  <span className="text-sm text-green-600 font-medium">
+                    +{formatCurrencyWithSymbol(asset.accruedInterest || 0, displayCurrency)}
+                  </span>
+                </CurrencyTooltip>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground flex items-center gap-1">
+                  <Calendar className="h-3 w-3" />
+                  Status
+                </span>
+                <span className={`text-sm font-medium ${
+                  asset.isMatured ? 'text-blue-600' : 'text-green-600'
+                }`}>
+                  {asset.status || 'Active'}
+                      </span>
+                    </div>
+              {(asset.maturityDate || asset.endDate) && (
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    Maturity Date
+                  </span>
+                  <span className="text-sm text-foreground">
+                    {new Date(asset.maturityDate || asset.endDate).toLocaleDateString()}
+                  </span>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Gross Profit/Loss */}
+          <div className="flex justify-between items-center pt-2 border-t border-border">
+            <span className="text-sm text-muted-foreground">
+              {t('assets.grossProfitLoss')}
+                  </span>
+                  <div className="flex items-center space-x-1">
+              <CurrencyTooltip
+                originalAmount={assetAny.originalGain || Math.abs(grossProfit)}
+                originalCurrency={assetAny.originalCurrency || asset.currency || displayCurrency}
+                convertedAmount={Math.abs(grossProfit)}
+                convertedCurrency={displayCurrency}
+              >
+                <span className={`font-medium ${grossProfit >= 0 ? 'text-profit' : 'text-loss'}`}>
+                  {grossProfit >= 0 ? '+' : ''}
+                  {formatCurrencyWithSymbol(Math.abs(grossProfit), displayCurrency)}
+                </span>
+              </CurrencyTooltip>
+              <span className={`text-sm ${(asset.gainPercent || 0) >= 0 ? 'text-profit' : 'text-loss'}`}>
+                ({formatPercentage(Math.abs(asset.gainPercent || 0))})
+              </span>
+            </div>
+          </div>
+
+          {/* Tax Information */}
+          {taxCalculation.taxRate > 0 && (
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">
+                {t('assets.tax')} ({formatPercentage(taxCalculation.taxRate)})
+              </span>
+              <span className="font-medium text-loss">
+                -{formatCurrencyWithSymbol(taxCalculation.taxAmount, displayCurrency)}
+              </span>
+            </div>
+          )}
+
+          {/* Net Profit/Loss */}
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-muted-foreground">
+              {t('assets.netProfitLoss')}
+                    </span>
+            <div className="flex items-center space-x-1">
+              <span className={`font-medium ${taxCalculation.netProfit >= 0 ? 'text-profit' : 'text-loss'}`}>
+                {taxCalculation.netProfit >= 0 ? '+' : ''}
+                {formatCurrencyWithSymbol(Math.abs(taxCalculation.netProfit), displayCurrency)}
+                    </span>
+              {taxCalculation.netProfit >= 0 ? (
+                      <TrendingUp className="h-4 w-4 text-profit" />
+                    ) : (
+                      <TrendingDown className="h-4 w-4 text-loss" />
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+  )
+}
+
+function Assets() {
   const { t } = useTranslation()
-  const [assets, setAssets] = useState(mockAssets)
-  const [convertedAssets, setConvertedAssets] = useState<any[]>(assets)
+  const { isAuthenticated, user } = useAuth()
+  const [assets, setAssets] = useState<Asset[]>([])
+  const [convertedAssets, setConvertedAssets] = useState<Asset[]>([])
   const [displayCurrency, setDisplayCurrency] = useState('USD')
-  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editingAsset, setEditingAsset] = useState<Asset | null>(null)
+  const [copyingAsset, setCopyingAsset] = useState<Asset | null>(null)
   const [isConverting, setIsConverting] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  
+  // Tax settings state
+  const [showTaxSettings, setShowTaxSettings] = useState(false)
+  const [taxSettings, setTaxSettings] = useState<TaxSettings>({
+    stock: {
+      capitalGainsTax: 0,
+      dividendTax: 0,
+    },
+    deposit: {
+      interestTax: 0,
+    },
+    preciousMetal: {
+      capitalGainsTax: 0,
+    },
+    recurringIncome: {
+      incomeTax: 0,
+    },
+    crypto: {
+      capitalGainsTax: 0,
+    },
+    realEstate: {
+      capitalGainsTax: 0,
+      rentalIncomeTax: 0,
+    },
+    bonds: {
+      interestTax: 0,
+      capitalGainsTax: 0,
+    },
+    cash: {
+      interestTax: 0,
+    },
+  })
+  
+  // Use backend currency rates hook
+  const { convertAmount } = useBackendCurrencyRates()
 
-  // Asset management handlers
+  // Load assets from backend
+  const loadAssets = async () => {
+    setIsLoading(true)
+    try {
+      const data = await assetsApi.getAllAssets()
+      setAssets(data)
+      
+      // Load user preferences to get tax settings
+      if (user?.preferences?.taxSettings) {
+        setTaxSettings(user.preferences.taxSettings)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load assets')
+      console.error('Failed to load assets:', err)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleTaxSettingChange = (assetType: keyof TaxSettings, taxType: string, value: number) => {
+    setTaxSettings(prev => ({
+      ...prev,
+      [assetType]: {
+        ...prev[assetType],
+        [taxType]: value
+      }
+    }))
+  }
+
+  const handleTaxSettingsSave = async () => {
+    try {
+      await usersApi.updatePreferences({
+        taxSettings
+      })
+      // Show success message or notification
+    } catch (error) {
+      console.error('Failed to save tax settings:', error)
+      setError('Failed to save tax settings')
+    }
+  }
+
   const handleAddAsset = () => {
-    setIsModalOpen(true)
+    setCopyingAsset(null)
+    setShowAddModal(true)
+  }
+
+  // Helper functions for mapping frontend to backend format
+  const mapAssetType = (type: string) => {
+    switch (type) {
+      case 'preciousMetal': return 'precious_metal'
+      case 'recurringIncome': return 'recurring_income'
+      default: return type
+    }
+  }
+
+  // Map compounding frequency to backend enum
+  const mapCompounding = (freq: string) => {
+    switch (freq) {
+      case 'annually': return 'annually'
+      case 'quarterly': return 'quarterly'
+      case 'monthly': return 'monthly'
+      case 'daily': return 'daily'
+      default: return freq
+    }
   }
 
   const handleAddAssetSubmit = async (newAsset: any) => {
-    const updatedAssets = [...assets, newAsset]
-    setAssets(updatedAssets)
-    
-    // Convert the new asset list to display currency
-    if (displayCurrency !== 'USD') {
+    try {
+      setIsLoading(true)
+
+      // Convert the frontend asset format to backend format
+      const backendAsset: any = {
+        type: mapAssetType(newAsset.type),
+        name: newAsset.name,
+        currency: newAsset.currency
+      }
+
+      // Add type-specific fields
+      if (newAsset.type === 'stock') {
+        if (newAsset.ticker) backendAsset.symbol = newAsset.ticker
+        if (newAsset.quantity) backendAsset.quantity = newAsset.quantity
+        if (newAsset.purchasePrice) backendAsset.purchasePrice = newAsset.purchasePrice
+        if (newAsset.currentPrice) backendAsset.currentPrice = newAsset.currentPrice
+      }
+
+      if (newAsset.type === 'deposit') {
+        if (newAsset.principal) backendAsset.principal = newAsset.principal
+        if (newAsset.rate) backendAsset.interestRate = newAsset.rate
+        if (newAsset.startDate) backendAsset.startDate = newAsset.startDate
+        if (newAsset.maturityDate) backendAsset.endDate = newAsset.maturityDate
+        if (newAsset.compoundingFrequency) backendAsset.interestSchedule = newAsset.compoundingFrequency.toLowerCase()
+        if (newAsset.interestType) backendAsset.compounding = newAsset.interestType === 'compound' ? 'compound' : 'simple'
+      }
+
+      if (newAsset.type === 'preciousMetal') {
+        if (newAsset.weight) backendAsset.weight = newAsset.weight
+        if (newAsset.purity) backendAsset.purity = newAsset.purity
+        if (newAsset.currentPrice) backendAsset.acquisitionCost = newAsset.currentPrice
+        backendAsset.metalType = 'gold' // Default metal type
+      }
+
+      if (newAsset.type === 'recurringIncome') {
+        if (newAsset.monthlyAmount) backendAsset.amountPerPeriod = newAsset.monthlyAmount
+        if (newAsset.frequency) backendAsset.frequency = newAsset.frequency
+      }
+
+      if (newAsset.type === 'cash') {
+        if (newAsset.value) backendAsset.acquisitionCost = newAsset.value
+      }
+
+      // Debug logging
+      console.log('Frontend asset:', newAsset)
+      console.log('Backend asset:', backendAsset)
+      
+      const createdAsset = await assetsApi.createAsset(backendAsset)
+      setAssets(prev => [...prev, createdAsset])
+      setShowAddModal(false)
+      
+      // Update converted assets
+      const updatedAssets = [...assets, createdAsset]
       await updateDisplayCurrency(displayCurrency, updatedAssets)
-    } else {
-      setConvertedAssets(updatedAssets)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create asset')
+      console.error('Failed to create asset:', err)
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  const handleEditAsset = (assetId: number) => {
-    // For now, just show a placeholder alert
-    alert(`Edit Asset ${assetId} functionality coming soon!`)
+  const handleEditAsset = (assetId: string) => {
+    const asset = assets.find(a => a.id === assetId)
+    if (asset) {
+      setEditingAsset(asset)
+      setShowEditModal(true)
+    }
   }
 
-  const handleDeleteAsset = (assetId: number) => {
-    if (confirm('Are you sure you want to delete this asset?')) {
+  const handleCopyAsset = (asset: Asset) => {
+    // Find the original asset from the assets array (not the converted one)
+    // to ensure principal and other values are in their original currency
+    const originalAsset = assets.find(a => a.id === asset.id) || asset
+    setCopyingAsset(originalAsset)
+    setShowAddModal(true)
+  }
+
+  const handleEditAssetSubmit = async (updatedAsset: Asset) => {
+    try {
+      setIsLoading(true)
+      
+      // Map frontend asset to backend format
+      const mapAssetForBackend = (asset: Asset) => {
+        const backendAsset: any = {
+          type: mapAssetType(asset.type),
+          name: asset.name,
+          currency: asset.currency
+        }
+
+        // Map type-specific fields
+        if (asset.type === 'stock') {
+          if (asset.ticker) backendAsset.symbol = asset.ticker
+          if (asset.quantity) backendAsset.quantity = asset.quantity
+          if (asset.purchasePrice) backendAsset.purchasePrice = asset.purchasePrice
+          if (asset.currentPrice) backendAsset.currentPrice = asset.currentPrice
+        }
+
+        if (asset.type === 'deposit') {
+          if (asset.principal) backendAsset.principal = asset.principal
+          if (asset.rate) backendAsset.interestRate = asset.rate
+          if (asset.startDate) backendAsset.startDate = asset.startDate
+          if (asset.maturityDate) backendAsset.endDate = asset.maturityDate
+          
+          // Debug logging
+          console.log('Frontend deposit fields:', {
+            compoundingFrequency: asset.compoundingFrequency,
+            interestType: asset.interestType
+          })
+          
+          if (asset.compoundingFrequency) {
+            // Make sure compoundingFrequency is a valid frequency, not the interest type
+            const validFrequencies = ['daily', 'monthly', 'quarterly', 'annually']
+            const frequency = validFrequencies.includes(asset.compoundingFrequency.toLowerCase()) 
+              ? asset.compoundingFrequency.toLowerCase() 
+              : 'annually' // default fallback
+            backendAsset.interestSchedule = frequency
+            console.log('Mapped interestSchedule:', frequency)
+          }
+          
+          if (asset.interestType) {
+            const compoundingType = asset.interestType === 'compound' ? 'compound' : 'simple'
+            backendAsset.compounding = compoundingType
+            console.log('Mapped compounding:', compoundingType)
+          }
+        }
+
+        if (asset.type === 'preciousMetal') {
+          if (asset.weight) backendAsset.weight = asset.weight
+          if (asset.purity) backendAsset.purity = asset.purity
+          if (asset.currentPrice) backendAsset.acquisitionCost = asset.currentPrice
+          backendAsset.metalType = 'gold' // Default metal type
+        }
+
+        if (asset.type === 'recurringIncome') {
+          if (asset.monthlyAmount) backendAsset.amountPerPeriod = asset.monthlyAmount
+          if (asset.frequency) backendAsset.frequency = asset.frequency
+        }
+
+        if (asset.type === 'cash') {
+          if (asset.value) backendAsset.acquisitionCost = asset.value
+        }
+
+        console.log('Mapping asset for backend update:', { frontend: asset, backend: backendAsset })
+        return backendAsset
+      }
+
+      const backendAsset = mapAssetForBackend(updatedAsset)
+      const savedAsset = await assetsApi.updateAsset(updatedAsset.id, backendAsset)
+      setAssets(prev => prev.map(asset => asset.id === savedAsset.id ? savedAsset : asset))
+      setShowEditModal(false)
+      setEditingAsset(null)
+      
+      // Update converted assets
+      const updatedAssets = assets.map(asset => asset.id === savedAsset.id ? savedAsset : asset)
+      await updateDisplayCurrency(displayCurrency, updatedAssets)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update asset')
+      console.error('Failed to update asset:', err)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleDeleteAsset = async (assetId: string) => {
+    if (!window.confirm(t('assets.confirmDelete'))) {
+      return
+    }
+    
+    try {
+      setIsLoading(true)
+      await assetsApi.deleteAsset(assetId)
       const updatedAssets = assets.filter(asset => asset.id !== assetId)
       setAssets(updatedAssets)
-      setConvertedAssets(convertedAssets.filter(asset => asset.id !== assetId))
+      await updateDisplayCurrency(displayCurrency, updatedAssets)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete asset')
+      console.error('Failed to delete asset:', err)
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  // Currency conversion
   const updateDisplayCurrency = async (currency: string, assetsToConvert = assets) => {
     setIsConverting(true)
     try {
       // Update deposit values with current calculations before conversion
       const updatedAssets = assetsToConvert.map(asset => {
-        if (asset.type === 'deposit' && asset.startDate) {
-          const depositInfo = {
-            principal: asset.principal,
-            rate: asset.rate,
-            startDate: asset.startDate,
-            maturityDate: asset.maturityDate,
-            compoundingFrequency: (asset.compoundingFrequency as 'daily' | 'monthly' | 'quarterly' | 'annually') || 'annually',
-            interestType: (asset.interestType as 'simple' | 'compound' | 'progressive' | 'variable' | 'tiered') || 'compound',
-            progressiveRates: (asset as any).progressiveRates,
-            variableRates: (asset as any).variableRates,
-            tieredRates: (asset as any).tieredRates
-          }
-          const depositValue = calculateDepositValue(depositInfo)
+        if (asset.type === 'deposit' && asset.startDate && asset.principal) {
+          // Map backend field names to frontend expected names
+          const principal = parseFloat(asset.principal?.toString() || '0')
+          const rate = parseFloat(asset.rate?.toString() || asset.interestRate?.toString() || '0')
+          const startDate = asset.startDate
+          const maturityDate = asset.maturityDate || asset.endDate
+          const compoundingFrequency = asset.compoundingFrequency || asset.interestSchedule || 'annually'
+          const interestType = asset.interestType || asset.compounding || 'compound'
           
-          return {
-            ...asset,
-            value: depositValue.currentValue,
-            accruedInterest: depositValue.accruedInterest,
-            daysElapsed: depositValue.daysElapsed,
-            status: getDepositStatus(depositValue),
-            isMatured: depositValue.isMatured,
-            projectedMaturityValue: depositValue.projectedMaturityValue,
-            gain: depositValue.accruedInterest,
-            gainPercent: depositValue.accruedInterest > 0 ? (depositValue.accruedInterest / asset.principal) * 100 : 0
+          console.log('Processing deposit:', {
+            name: asset.name,
+            principal,
+            rate,
+            startDate,
+            maturityDate,
+            compoundingFrequency,
+            interestType
+          })
+          
+          if (principal > 0 && rate > 0) {
+            const depositInfo = {
+              principal,
+              rate,
+              startDate,
+              maturityDate,
+              compoundingFrequency: (compoundingFrequency as 'daily' | 'monthly' | 'quarterly' | 'annually'),
+              interestType: (interestType as 'simple' | 'compound' | 'progressive' | 'variable' | 'tiered'),
+              progressiveRates: (asset as any).progressiveRates,
+              variableRates: (asset as any).variableRates,
+              tieredRates: (asset as any).tieredRates
+            }
+            const depositValue = calculateDepositValue(depositInfo)
+            
+            return {
+              ...asset,
+              // Add mapped fields for display
+              rate,
+              maturityDate,
+              compoundingFrequency,
+              interestType,
+              // Add calculated values
+              value: depositValue.currentValue,
+              accruedInterest: depositValue.accruedInterest,
+              daysElapsed: depositValue.daysElapsed,
+              status: getDepositStatus(depositValue),
+              isMatured: depositValue.isMatured,
+              projectedMaturityValue: depositValue.projectedMaturityValue,
+              gain: depositValue.accruedInterest,
+              gainPercent: principal > 0 ? (depositValue.accruedInterest / principal) * 100 : 0
+            }
           }
         }
         return asset
       })
       
-      const converted = await convertAssetValues(updatedAssets, currency)
+      const converted = await convertAssetValues(updatedAssets, currency, convertAmount)
       setConvertedAssets(converted)
       setDisplayCurrency(currency)
     } catch (error) {
@@ -140,10 +853,17 @@ export default function Assets() {
     updateDisplayCurrency(displayCurrency)
   }
 
-  // Initialize with USD conversion on mount
+  // Initialize with USD conversion on mount and load assets
   useEffect(() => {
-    updateDisplayCurrency('USD')
+    loadAssets()
   }, [])
+
+  // Load assets when component mounts
+  useEffect(() => {
+    if (assets.length > 0) {
+      updateDisplayCurrency('USD')
+    }
+  }, [assets.length])
 
   const getTotalValue = () => {
     return convertedAssets.reduce((sum, asset) => {
@@ -161,14 +881,56 @@ export default function Assets() {
     }, 0)
   }
 
+  const getTotalNetGain = () => {
+    return convertedAssets.reduce((sum, asset) => {
+      const assetAny = asset as any
+      
+      // Calculate after-tax profit for this asset
+      const grossProfit = getDisplayGain(asset) // Already converted gain
+      
+      // Get original gain for tax calculation
+      const originalGain = assetAny.originalGain || assetAny.gain || grossProfit
+      
+      // Calculate tax on original gain, then convert to display currency
+      const originalTaxCalculation = calculateAfterTaxProfit(
+        asset.type,
+        asset.type === 'deposit' ? 'interest' : 'capital_gains',
+        originalGain,
+        user?.preferences?.taxSettings
+      )
+      
+      // If currency conversion was applied, convert tax amounts
+      let taxCalculation
+      if (assetAny.originalCurrency && assetAny.originalCurrency !== displayCurrency && originalGain !== 0) {
+        // Tax was calculated on original amount, so convert the tax and net amounts
+        const conversionRatio = grossProfit / originalGain
+        taxCalculation = {
+          grossProfit: grossProfit,
+          taxAmount: originalTaxCalculation.taxAmount * Math.abs(conversionRatio),
+          netProfit: originalTaxCalculation.netProfit * conversionRatio,
+          taxRate: originalTaxCalculation.taxRate
+        }
+      } else {
+        // No conversion needed
+        taxCalculation = {
+          grossProfit: grossProfit,
+          taxAmount: originalTaxCalculation.taxAmount,
+          netProfit: originalTaxCalculation.netProfit,
+          taxRate: originalTaxCalculation.taxRate
+        }
+      }
+      
+      return sum + taxCalculation.netProfit
+    }, 0)
+  }
+
   const getDisplayValue = (asset: any) => {
     return asset.convertedValue || asset.value || 0
   }
 
   const getDisplayGain = (asset: any) => {
-    if (asset.convertedValue && asset.originalValue) {
-      return (asset.gain || 0) * (asset.convertedValue / asset.originalValue)
-    }
+    // The gain should already be converted in convertAssetValues function
+    // Don't apply additional conversion here as it would double-convert
     return asset.gain || 0
   }
 
@@ -218,167 +980,252 @@ export default function Assets() {
         </div>
       </div>
 
+      {/* Tax Settings */}
+      <Card className="p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Settings className="h-5 w-5 text-muted-foreground" />
+            <h3 className="text-lg font-semibold text-foreground">
+              {t('settings.taxSettings')}
+            </h3>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowTaxSettings(!showTaxSettings)}
+            className="flex items-center space-x-2"
+          >
+            {showTaxSettings ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+            <span>{showTaxSettings ? t('common.hide') : t('common.show')}</span>
+          </Button>
+        </div>
+        
+        {showTaxSettings && (
+          <div className="mt-4 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* Stock Tax Settings */}
+              <div className="space-y-3">
+                <h4 className="font-medium text-foreground">{t('assets.stock')}</h4>
+                <div className="space-y-2">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">
+                      {t('settings.capitalGainsTax')} (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={taxSettings.stock?.capitalGainsTax || 0}
+                      onChange={(e) => handleTaxSettingChange('stock', 'capitalGainsTax', parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">
+                      {t('settings.dividendTax')} (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={taxSettings.stock?.dividendTax || 0}
+                      onChange={(e) => handleTaxSettingChange('stock', 'dividendTax', parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Deposit Tax Settings */}
+              <div className="space-y-3">
+                <h4 className="font-medium text-foreground">{t('assets.deposit')}</h4>
+                <div className="space-y-2">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">
+                      {t('settings.interestTax')} (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={taxSettings.deposit?.interestTax || 0}
+                      onChange={(e) => handleTaxSettingChange('deposit', 'interestTax', parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Precious Metal Tax Settings */}
+              <div className="space-y-3">
+                <h4 className="font-medium text-foreground">{t('assets.preciousMetal')}</h4>
+                <div className="space-y-2">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">
+                      {t('settings.capitalGainsTax')} (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={taxSettings.preciousMetal?.capitalGainsTax || 0}
+                      onChange={(e) => handleTaxSettingChange('preciousMetal', 'capitalGainsTax', parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Recurring Income Tax Settings */}
+              <div className="space-y-3">
+                <h4 className="font-medium text-foreground">{t('assets.recurringIncome')}</h4>
+                <div className="space-y-2">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">
+                      {t('settings.incomeTax')} (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={taxSettings.recurringIncome?.incomeTax || 0}
+                      onChange={(e) => handleTaxSettingChange('recurringIncome', 'incomeTax', parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Crypto Tax Settings */}
+              <div className="space-y-3">
+                <h4 className="font-medium text-foreground">{t('assets.crypto')}</h4>
+                <div className="space-y-2">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">
+                      {t('settings.capitalGainsTax')} (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={taxSettings.crypto?.capitalGainsTax || 0}
+                      onChange={(e) => handleTaxSettingChange('crypto', 'capitalGainsTax', parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Real Estate Tax Settings */}
+              <div className="space-y-3">
+                <h4 className="font-medium text-foreground">{t('assets.realEstate')}</h4>
+                <div className="space-y-2">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">
+                      {t('settings.capitalGainsTax')} (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={taxSettings.realEstate?.capitalGainsTax || 0}
+                      onChange={(e) => handleTaxSettingChange('realEstate', 'capitalGainsTax', parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">
+                      {t('settings.rentalIncomeTax')} (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={taxSettings.realEstate?.rentalIncomeTax || 0}
+                      onChange={(e) => handleTaxSettingChange('realEstate', 'rentalIncomeTax', parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-4 border-t border-border">
+              <Button onClick={handleTaxSettingsSave} className="flex items-center space-x-2">
+                <DollarSign className="h-4 w-4" />
+                <span>{t('settings.saveTaxSettings')}</span>
+              </Button>
+            </div>
+          </div>
+        )}
+      </Card>
+
       {/* Currency Status */}
       <CurrencyStatus />
+
+      {/* Error Display */}
+      {error && (
+        <Card className="border-red-200 bg-red-50">
+          <div className="p-4 flex items-center space-x-3">
+            <AlertCircle className="h-5 w-5 text-red-500" />
+            <div>
+              <p className="text-sm font-medium text-red-800">Error</p>
+              <p className="text-sm text-red-600">{error}</p>
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setError(null)}
+              className="ml-auto"
+            >
+              Dismiss
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {/* Loading State */}
+      {isLoading && (
+        <Card className="border-blue-200 bg-blue-50">
+          <div className="p-4 flex items-center space-x-3">
+            <RefreshCw className="h-5 w-5 text-blue-500 animate-spin" />
+            <p className="text-sm text-blue-800">Loading assets...</p>
+          </div>
+        </Card>
+      )}
 
       {/* Assets Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
         {convertedAssets.map((asset) => {
           const assetAny = asset as any
           return (
-            <Card key={asset.id} className="asset-card">
-              <div className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h3 className="font-semibold text-lg text-foreground">
-                      {asset.name}
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
-                      {asset.type === 'stock' ? asset.ticker : t(`assets.${asset.type}`)}
-                      {assetAny.originalCurrency && assetAny.originalCurrency !== displayCurrency && (
-                        <span className="ml-2 text-xs bg-secondary px-1 rounded">
-                          from {assetAny.originalCurrency}
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                  <div className="flex space-x-1">
-                    <Button variant="ghost" size="sm" onClick={() => handleEditAsset(asset.id)}>
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleDeleteAsset(asset.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">
-                      {t('assets.marketValue')}
-                    </span>
-                    <span className="font-medium text-foreground">
-                      {formatCurrencyWithSymbol(getDisplayValue(asset), displayCurrency)}
-                    </span>
-                  </div>
-
-                  {asset.type === 'stock' && (
-                    <>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-muted-foreground">
-                          {t('assets.quantity')}
-                        </span>
-                        <span className="text-sm text-foreground">
-                          {asset.quantity} shares
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-muted-foreground">
-                          {t('assets.currentPrice')}
-                        </span>
-                        <span className="text-sm text-foreground">
-                          {formatCurrencyWithSymbol(asset.currentPrice || 0, assetAny.originalCurrency || asset.currency || displayCurrency)}
-                        </span>
-                      </div>
-                    </>
-                  )}
-
-                  {asset.type === 'deposit' && (
-                    <>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-muted-foreground">
-                          Principal
-                        </span>
-                        <span className="text-sm text-foreground">
-                          {formatCurrencyWithSymbol(asset.principal || 0, assetAny.originalCurrency || asset.currency || displayCurrency)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-muted-foreground">
-                          Interest Rate
-                        </span>
-                        <span className="text-sm text-foreground">
-                          {(asset.rate || 0).toFixed(2)}% per year
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-muted-foreground">
-                          Interest Type
-                        </span>
-                        <span className="text-sm text-foreground font-medium">
-                          {getInterestTypeInfo(asset.interestType || 'compound').name}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-muted-foreground flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          Duration
-                        </span>
-                        <span className="text-sm text-foreground">
-                          {asset.startDate && formatDepositDuration({
-                            daysElapsed: asset.daysElapsed || 0,
-                            monthsElapsed: Math.floor((asset.daysElapsed || 0) / 30),
-                            yearsElapsed: (asset.daysElapsed || 0) / 365,
-                            currentValue: 0,
-                            accruedInterest: 0,
-                            isMatured: asset.isMatured || false
-                          })}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-muted-foreground">
-                          Interest Earned
-                        </span>
-                        <span className="text-sm text-green-600 font-medium">
-                          +{formatCurrencyWithSymbol(asset.accruedInterest || 0, displayCurrency)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-muted-foreground flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          Status
-                        </span>
-                        <span className={`text-sm font-medium ${
-                          asset.isMatured ? 'text-blue-600' : 'text-green-600'
-                        }`}>
-                          {asset.status || 'Active'}
-                        </span>
-                      </div>
-                      {asset.maturityDate && (
-                        <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">
-                            Maturity Date
-                          </span>
-                          <span className="text-sm text-foreground">
-                            {new Date(asset.maturityDate).toLocaleDateString()}
-                          </span>
-                        </div>
-                      )}
-                    </>
-                  )}
-
-                  <div className="flex justify-between items-center pt-2 border-t border-border">
-                    <span className="text-sm text-muted-foreground">
-                      {t('assets.profitLoss')}
-                    </span>
-                    <div className="flex items-center space-x-1">
-                      <span className={`font-medium ${getDisplayGain(asset) >= 0 ? 'text-profit' : 'text-loss'}`}>
-                        {getDisplayGain(asset) >= 0 ? '+' : ''}
-                        {formatCurrencyWithSymbol(Math.abs(getDisplayGain(asset)), displayCurrency)}
-                      </span>
-                      <span className={`text-sm ${asset.gainPercent >= 0 ? 'text-profit' : 'text-loss'}`}>
-                        ({formatPercentage(Math.abs(asset.gainPercent))})
-                      </span>
-                      {asset.gainPercent >= 0 ? (
-                        <TrendingUp className="h-4 w-4 text-profit" />
-                      ) : (
-                        <TrendingDown className="h-4 w-4 text-loss" />
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Card>
+            <AssetCard
+              key={asset.id}
+              asset={asset}
+              displayCurrency={displayCurrency}
+              onEdit={handleEditAsset}
+              onDelete={handleDeleteAsset}
+              onCopy={handleCopyAsset}
+              t={t}
+              formatCurrencyWithSymbol={formatCurrencyWithSymbol}
+              getDisplayValue={getDisplayValue}
+              getDisplayGain={getDisplayGain}
+              formatPercentage={formatPercentage}
+              getInterestTypeInfo={getInterestTypeInfo}
+              formatDepositDuration={formatDepositDuration}
+            />
           )
         })}
 
@@ -417,10 +1264,10 @@ export default function Assets() {
         <Card className="metric-card">
           <div className="text-center">
             <p className="text-sm font-medium text-muted-foreground mb-1">
-              Total Gain/Loss
+              Total Net Gain/Loss
             </p>
             <p className="text-2xl font-bold text-profit">
-              +{formatCurrencyWithSymbol(getTotalGain(), displayCurrency)}
+              +{formatCurrencyWithSymbol(getTotalNetGain(), displayCurrency)}
             </p>
           </div>
         </Card>
@@ -439,10 +1286,27 @@ export default function Assets() {
 
       {/* Add Asset Modal */}
       <AddAssetModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        isOpen={showAddModal}
+        onClose={() => {
+          setShowAddModal(false)
+          setCopyingAsset(null)
+        }}
         onAdd={handleAddAssetSubmit}
+        initialData={copyingAsset}
+      />
+
+      {/* Edit Asset Modal */}
+      <EditAssetModal
+        isOpen={showEditModal}
+        onClose={() => {
+          setShowEditModal(false)
+          setEditingAsset(null)
+        }}
+        onUpdate={handleEditAssetSubmit}
+        asset={editingAsset}
       />
     </div>
   )
-} 
+}
+
+export default Assets

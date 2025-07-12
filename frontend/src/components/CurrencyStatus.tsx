@@ -3,7 +3,7 @@ import { RefreshCw, AlertCircle, CheckCircle, Clock } from 'lucide-react'
 import { Button } from './ui/Button'
 import { Badge } from './ui/Badge'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/Tooltip'
-import { useCurrencyRates } from '../hooks/useCurrencyRates'
+import { useBackendCurrencyRates } from '../hooks/useBackendCurrencyRates'
 import { cn } from '../lib/utils'
 
 interface CurrencyStatusProps {
@@ -25,7 +25,7 @@ export function CurrencyStatus({
     age, 
     refresh, 
     isStale 
-  } = useCurrencyRates()
+  } = useBackendCurrencyRates()
 
   const formatAge = (ageMs: number): string => {
     const minutes = Math.floor(ageMs / (1000 * 60))
@@ -41,7 +41,7 @@ export function CurrencyStatus({
   const getStatusColor = (): string => {
     if (error) return 'destructive'
     if (isStale) return 'warning'
-    if (source === 'fallback') return 'secondary'
+    if (source?.includes('fallback')) return 'secondary'
     return 'success'
   }
 
@@ -54,7 +54,7 @@ export function CurrencyStatus({
   const getStatusText = (): string => {
     if (error) return 'Error'
     if (isStale) return 'Stale'
-    if (source === 'fallback') return 'Offline'
+    if (source?.includes('fallback')) return 'Demo Rates'
     return 'Live'
   }
 
@@ -73,6 +73,9 @@ export function CurrencyStatus({
               <div className="text-sm">
                 <p>Last updated: {lastUpdate ? formatAge(age) : 'Never'}</p>
                 {source && <p>Source: {source}</p>}
+                {source?.includes('fallback') && (
+                  <p className="text-blue-500">Using demo rates for development</p>
+                )}
                 {error && <p className="text-red-500">Error: {error}</p>}
               </div>
             </TooltipContent>
@@ -107,8 +110,11 @@ export function CurrencyStatus({
             ) : (
               <span>Not loaded</span>
             )}
-            {source && source !== 'fallback' && (
+            {source && !source.includes('fallback') && (
               <span className="ml-2">• {source}</span>
+            )}
+            {source?.includes('fallback') && (
+              <span className="ml-2">• Demo data</span>
             )}
           </div>
         )}

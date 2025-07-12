@@ -3,12 +3,13 @@ import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 import { Card } from './ui/Card'
 import { RefreshCw } from 'lucide-react'
-import { useStockPrice, formatStockPrice, formatStockPriceChange, isValidStockSymbol } from '../lib/stockPrice'
+import { useBackendStockPrice } from '../hooks/useBackendStockPrice'
+import { formatStockPrice, formatStockPriceChange, isValidStockSymbol } from '../lib/api/marketDataApi'
 
 export function StockPriceDemo() {
   const [ticker, setTicker] = useState('')
   const [searchTicker, setSearchTicker] = useState<string | null>(null)
-  const { stockPrice, isLoading, error, refetch } = useStockPrice(searchTicker)
+  const { stockPrice, isLoading, error, refetch } = useBackendStockPrice(searchTicker)
 
   const handleSearch = () => {
     if (ticker && isValidStockSymbol(ticker)) {
@@ -25,7 +26,7 @@ export function StockPriceDemo() {
           <Input
             value={ticker}
             onChange={(e) => setTicker(e.target.value.toUpperCase())}
-            placeholder="Enter ticker (e.g., AAPL)"
+            placeholder="Enter ticker (e.g., AAPL, VOO, IWF)"
             className={ticker && !isValidStockSymbol(ticker) ? 'border-red-500' : ''}
           />
           <Button 

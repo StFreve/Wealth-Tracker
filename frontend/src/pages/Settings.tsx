@@ -25,6 +25,8 @@ export default function Settings() {
     confirmPassword: ''
   })
 
+
+
   // Update form when user data changes
   useEffect(() => {
     if (user) {
@@ -32,6 +34,7 @@ export default function Settings() {
         name: user.name || '',
         email: user.email || ''
       })
+
     }
   }, [user])
 
@@ -62,6 +65,8 @@ export default function Settings() {
     }))
   }
 
+
+
   const handleProfileSave = () => {
     // In a real app, this would make an API call
     if (user) {
@@ -71,6 +76,8 @@ export default function Settings() {
       })
     }
   }
+
+
 
   return (
     <div className="space-y-6">
@@ -187,6 +194,8 @@ export default function Settings() {
           </div>
         </Card>
       </div>
+
+
 
       {/* Security Settings */}
       <Card className="p-6">

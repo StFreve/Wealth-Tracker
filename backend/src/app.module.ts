@@ -10,6 +10,7 @@ import { AssetsModule } from './assets/assets.module';
 import { PortfolioModule } from './portfolio/portfolio.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { WidgetsModule } from './widgets/widgets.module';
+import { MarketDataModule } from './market-data/market-data.module';
 import { DatabaseModule } from './database/database.module';
 
 @Module({
@@ -50,6 +51,7 @@ import { DatabaseModule } from './database/database.module';
     PortfolioModule,
     AnalyticsModule,
     WidgetsModule,
+    MarketDataModule,
   ],
 })
 export class AppModule {} 

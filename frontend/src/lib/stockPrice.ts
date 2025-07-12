@@ -97,9 +97,11 @@ const STOCK_API_SOURCES = [
 
 /**
  * Validates if a stock symbol is likely valid
+ * Supports stocks, ETFs, and other equity securities
  */
 export function isValidStockSymbol(symbol: string): boolean {
-  // Basic validation - should be 1-5 characters, letters only
+  // Enhanced validation - should be 1-5 characters, letters only
+  // This covers most US stocks, ETFs, and many international listings
   const cleaned = symbol.trim().toUpperCase()
   return /^[A-Z]{1,5}$/.test(cleaned)
 }
@@ -109,16 +111,21 @@ export function isValidStockSymbol(symbol: string): boolean {
  */
 export async function getStockSuggestions(query: string): Promise<string[]> {
   // This would typically connect to a stock search API
-  // For now, return some common stocks that match the query
-  const commonStocks = [
+  // For now, return some common stocks and ETFs that match the query
+  const commonSymbols = [
+    // Popular Stocks
     'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'NFLX',
     'ORCL', 'CRM', 'ADBE', 'INTC', 'AMD', 'QCOM', 'AVGO', 'TXN',
-    'CSCO', 'PYPL', 'UBER', 'LYFT', 'SNAP', 'TWTR', 'PINS', 'SQ'
+    'CSCO', 'PYPL', 'UBER', 'LYFT', 'SNAP', 'TWTR', 'PINS', 'SQ',
+    // Popular ETFs
+    'VOO', 'IWF', 'SPY', 'QQQ', 'VTI', 'IVV', 'VEA', 'VWO', 
+    'IEFA', 'IEMG', 'VYM', 'VUG', 'IWM', 'EFA', 'EEM', 'GLD', 
+    'SLV', 'TLT', 'HYG', 'LQD'
   ]
   
   const upperQuery = query.toUpperCase()
-  return commonStocks.filter(stock => 
-    stock.startsWith(upperQuery) || stock.includes(upperQuery)
+  return commonSymbols.filter(symbol => 
+    symbol.startsWith(upperQuery) || symbol.includes(upperQuery)
   ).slice(0, 10)
 }
 

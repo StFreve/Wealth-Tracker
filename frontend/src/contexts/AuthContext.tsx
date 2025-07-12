@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { TaxSettings } from '@/lib/api/usersApi'
 
 interface User {
   id: string
@@ -10,6 +11,7 @@ interface User {
     language: string
     currency: string
     theme: string
+    taxSettings?: TaxSettings
   }
 }
 

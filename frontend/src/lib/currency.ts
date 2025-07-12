@@ -36,20 +36,23 @@ let exchangeRatesCache: RatesFetchResult | null = null
 const CACHE_DURATION = 10 * 60 * 1000 // 10 minutes for more frequent updates
 const FALLBACK_CACHE_DURATION = 60 * 60 * 1000 // 1 hour for fallback rates
 
-// Fallback exchange rates (approximate values for demo)
+// Development mode check
+const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+
+// Fallback exchange rates (approximate values for demo - updated December 2024)
 const FALLBACK_RATES: ExchangeRates = {
   USD: 1.0,
-  EUR: 0.85,
-  GBP: 0.73,
-  JPY: 110.0,
-  CAD: 1.25,
-  AUD: 1.35,
-  CHF: 0.92,
-  CNY: 6.4,
-  RUB: 75.0,
-  INR: 74.0,
-  AMD: 390.0,
-  GEL: 2.65
+  EUR: 0.92,
+  GBP: 0.79,
+  JPY: 149.0,
+  CAD: 1.36,
+  AUD: 1.53,
+  CHF: 0.88,
+  CNY: 7.15,
+  RUB: 95.0,
+  INR: 83.0,
+  AMD: 385.0,
+  GEL: 2.70
 }
 
 // Loading state management
@@ -57,29 +60,34 @@ let isUpdatingRates = false
 const rateUpdateListeners: Array<(result: RatesFetchResult) => void> = []
 
 /**
- * Multiple API sources for redundancy
+ * Multiple API sources for redundancy - using CORS-enabled APIs
  */
 const API_SOURCES = [
   {
-    name: 'exchangerate-api',
-    url: 'https://api.exchangerate-api.com/v4/latest/USD',
+    name: 'exchangerate-host',
+    url: 'https://api.exchangerate.host/latest?base=USD',
     parseResponse: (data: any) => data.rates
   },
   {
-    name: 'fixer',
-    url: 'https://api.fixer.io/latest?base=USD',
-    parseResponse: (data: any) => data.rates
-  },
-  {
-    name: 'currencyapi',
-    url: 'https://api.currencyapi.com/v3/latest?apikey=YOUR_API_KEY&base_currency=USD',
+    name: 'fawazahmed0',
+    url: 'https://cdn.jsdelivr.net/gh/fawazahmed0/currency-api@1/latest/currencies/usd.json',
     parseResponse: (data: any) => {
-      const rates: ExchangeRates = {}
-      Object.entries(data.data).forEach(([key, value]: [string, any]) => {
-        rates[key] = value.value
+      const rates: ExchangeRates = { USD: 1.0 }
+      Object.entries(data.usd).forEach(([key, value]: [string, any]) => {
+        rates[key.toUpperCase()] = value
       })
       return rates
     }
+  },
+  {
+    name: 'cors-proxy-exchangerate',
+    url: 'https://cors-anywhere.herokuapp.com/https://api.exchangerate-api.com/v4/latest/USD',
+    parseResponse: (data: any) => data.rates
+  },
+  {
+    name: 'exchangerate-api-free',
+    url: 'https://open.er-api.com/v6/latest/USD',
+    parseResponse: (data: any) => data.rates
   }
 ]
 
@@ -116,7 +124,8 @@ export async function fetchExchangeRates(forceRefresh: boolean = false): Promise
           headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json'
-          }
+          },
+          mode: 'cors'
         })
         
         if (!response.ok) {
@@ -164,7 +173,17 @@ export async function fetchExchangeRates(forceRefresh: boolean = false): Promise
         
         throw new Error('Invalid response format')
       } catch (error) {
-        console.warn(`Failed to fetch from ${apiSource.name}:`, error)
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        
+        // More specific error logging for CORS issues
+        if (errorMessage.includes('CORS') || errorMessage.includes('Access-Control-Allow-Origin')) {
+          console.warn(`CORS error with ${apiSource.name}:`, errorMessage)
+          if (isDevelopment) {
+            console.info(`💡 Development tip: ${apiSource.name} doesn't support CORS for localhost. Trying next API source...`)
+          }
+        } else {
+          console.warn(`Failed to fetch from ${apiSource.name}:`, errorMessage)
+        }
         continue
       }
     }
@@ -172,6 +191,11 @@ export async function fetchExchangeRates(forceRefresh: boolean = false): Promise
     throw new Error('All API sources failed')
   } catch (error) {
     console.error('Failed to fetch exchange rates from all sources:', error)
+    
+    // Show user-friendly message in development
+    if (isDevelopment) {
+      console.info('💡 Exchange Rate APIs Issue: Using fallback rates for development. This is normal and won\'t affect production.')
+    }
     
     // Use cached rates if available, even if expired
     if (exchangeRatesCache && Date.now() - exchangeRatesCache.timestamp < FALLBACK_CACHE_DURATION) {
@@ -183,11 +207,12 @@ export async function fetchExchangeRates(forceRefresh: boolean = false): Promise
     const fallbackResult: RatesFetchResult = {
       rates: FALLBACK_RATES,
       timestamp: Date.now(),
-      source: 'fallback',
+      source: 'fallback (demo rates)',
       lastUpdated: new Date()
     }
     
     exchangeRatesCache = fallbackResult
+    console.info('Using fallback exchange rates for currency conversion')
     return fallbackResult
   } finally {
     isUpdatingRates = false

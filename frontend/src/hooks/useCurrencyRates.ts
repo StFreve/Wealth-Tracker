@@ -1,14 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { 
   fetchExchangeRates, 
-  refreshRates, 
-  getRateStatus, 
-  subscribeToRateUpdates,
-  startAutoRefresh,
   convertCurrency,
-  getExchangeRate,
-  type RatesFetchResult
-} from '../lib/currency'
+  type CurrencyRateResponse
+} from '../lib/api/marketDataApi'
 
 interface CurrencyRatesHookReturn {
   rates: { [key: string]: number } | null
@@ -47,7 +42,7 @@ export function useCurrencyRates(autoRefresh: boolean = true): CurrencyRatesHook
           setRates(result.rates)
           setLastUpdate(result.lastUpdated)
           setSource(result.source)
-          setAge(Date.now() - result.timestamp)
+          setAge(Date.now() - result.lastUpdated.getTime())
         }
       } catch (err) {
         if (mounted) {
@@ -67,37 +62,37 @@ export function useCurrencyRates(autoRefresh: boolean = true): CurrencyRatesHook
     }
   }, [])
 
-  // Subscribe to rate updates
-  useEffect(() => {
-    const unsubscribe = subscribeToRateUpdates((result: RatesFetchResult) => {
-      setRates(result.rates)
-      setLastUpdate(result.lastUpdated)
-      setSource(result.source)
-      setAge(Date.now() - result.timestamp)
-      setError(null)
-    })
-    
-    return unsubscribe
-  }, [])
-
   // Auto-refresh setup
   useEffect(() => {
     if (!autoRefresh) return
     
-    const stopAutoRefresh = startAutoRefresh(15) // Refresh every 15 minutes
+    const interval = setInterval(async () => {
+      try {
+        const result = await fetchExchangeRates(true) // Force refresh
+        setRates(result.rates)
+        setLastUpdate(result.lastUpdated)
+        setSource(result.source)
+        setAge(Date.now() - result.lastUpdated.getTime())
+        setError(null)
+      } catch (err) {
+        // Don't set error on auto-refresh failure, keep existing data
+        console.warn('Auto-refresh failed:', err)
+      }
+    }, 15 * 60 * 1000) // Refresh every 15 minutes
     
-    return stopAutoRefresh
+    return () => clearInterval(interval)
   }, [autoRefresh])
 
   // Update age periodically
   useEffect(() => {
     const interval = setInterval(() => {
-      const status = getRateStatus()
-      setAge(status.age)
+      if (lastUpdate) {
+        setAge(Date.now() - lastUpdate.getTime())
+      }
     }, 60000) // Update every minute
     
     return () => clearInterval(interval)
-  }, [])
+  }, [lastUpdate])
 
   // Manual refresh function
   const refresh = useCallback(async () => {
@@ -105,11 +100,11 @@ export function useCurrencyRates(autoRefresh: boolean = true): CurrencyRatesHook
     setError(null)
     
     try {
-      const result = await refreshRates()
+      const result = await fetchExchangeRates(true) // Force refresh
       setRates(result.rates)
       setLastUpdate(result.lastUpdated)
       setSource(result.source)
-      setAge(Date.now() - result.timestamp)
+      setAge(Date.now() - result.lastUpdated.getTime())
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to refresh rates')
     } finally {
@@ -122,10 +117,32 @@ export function useCurrencyRates(autoRefresh: boolean = true): CurrencyRatesHook
     return await convertCurrency(amount, from, to)
   }, [])
 
-  // Get exchange rate helper
+  // Get exchange rate helper  
   const getRate = useCallback(async (from: string, to: string) => {
-    return await getExchangeRate(from, to)
-  }, [])
+    if (!rates) {
+      throw new Error('Rates not loaded')
+    }
+    
+    if (from === to) {
+      return 1
+    }
+    
+    // All rates are relative to USD
+    if (from === 'USD' && rates[to]) {
+      return rates[to]
+    }
+    
+    if (to === 'USD' && rates[from]) {
+      return 1 / rates[from]
+    }
+    
+    // For cross-currency conversion: USD -> from -> to
+    if (rates[from] && rates[to]) {
+      return rates[to] / rates[from]
+    }
+    
+    throw new Error(`Cannot convert from ${from} to ${to}`)
+  }, [rates])
 
   // Check if rates are stale (older than 30 minutes)
   const isStale = age > 30 * 60 * 1000
