@@ -1,0 +1,122 @@
+# Real-Time Personal Wealth Tracker
+
+A modern web application for tracking and visualizing personal wealth across multiple asset classes with multilingual support (English/Russian).
+
+## 🌟 Features
+
+- **Unified Dashboard** - Track all assets in one place
+- **Multiple Asset Types** - Stocks, deposits, precious metals, recurring income
+- **Real-time Calculations** - Instant balance updates and performance metrics
+- **Interactive Charts** - Line, area, and stacked-bar visualizations
+- **Multilingual UI** - Full English and Russian support
+- **Shareable Widgets** - Generate embeddable portfolio snapshots
+- **Modern Design** - Responsive UI with dark mode support
+- **Manual Data Entry** - Complete control over your financial data
+
+## 🏗️ Architecture
+
+```
+wealth-tracker/
+├── frontend/          # React + Vite + TypeScript
+├── backend/           # NestJS + PostgreSQL
+├── docker-compose.yml # Development environment
+└── docs/              # Documentation
+```
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Node.js 18+
+- Docker and Docker Compose
+- Git
+
+### Installation
+
+1. **Clone and setup**
+   ```bash
+   git clone <repository-url>
+   cd wealth-tracker
+   npm run install:all
+   ```
+
+2. **Start development environment**
+   ```bash
+   # Start PostgreSQL with Docker
+   docker-compose up -d db
+   
+   # Start both frontend and backend
+   npm run dev
+   ```
+
+3. **Access the application**
+   - Frontend: http://localhost:5173
+   - Backend API: http://localhost:3001
+   - Database: PostgreSQL on localhost:5432
+
+## 📊 Supported Asset Types
+
+| Asset Type | Features |
+|------------|----------|
+| **Stocks** | Multiple lots, dividend tracking, tax calculations |
+| **Term Deposits** | Compound interest, flexible accrual schedules |
+| **Precious Metals** | Gold, silver, platinum with manual pricing |
+| **Recurring Income** | Salary, dividends, rental income |
+
+## 🌍 Internationalization
+
+The application supports:
+- **English** (default)
+- **Russian** (complete translation)
+- Architecture ready for additional languages
+
+## 🔒 Security & Privacy
+
+- JWT-based authentication
+- Argon2 password hashing
+- User-scoped data isolation
+- No external API calls
+- Self-hosted data storage
+
+## 📱 Future Mobile App
+
+The API is designed to support a future React Native mobile app with full synchronization capabilities.
+
+## 🧪 Testing
+
+```bash
+# Run all tests
+npm run test
+
+# Frontend tests only
+npm run test:frontend
+
+# Backend tests only
+npm run test:backend
+```
+
+## 🏭 Production Deployment
+
+See `docs/deployment.md` for detailed production setup instructions including:
+- Docker deployment
+- Environment configuration
+- Database migrations
+- SSL setup
+
+## 📚 Documentation
+
+- [API Documentation](docs/api.md)
+- [User Guide](docs/user-guide.md)
+- [Development Guide](docs/development.md)
+- [Deployment Guide](docs/deployment.md)
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests
+5. Submit a pull request
+
+## 📄 License
+
+MIT License - see LICENSE file for details. 
