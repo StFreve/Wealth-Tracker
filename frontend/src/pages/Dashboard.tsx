@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { CurrencyStatus } from '../components/CurrencyStatus';
-import { CURRENCIES } from '@/lib/currency';
 import { useBackendCurrencyRates } from '@/hooks/useBackendCurrencyRates';
 import { portfolioApi, PortfolioMetrics } from '@/lib/api/portfolioApi';
+import { AssetAllocationChart } from '@/components/charts';
 import { 
   TrendingUpIcon, 
   DollarSignIcon, 
@@ -59,13 +60,12 @@ const convertValue = async (
 export default function Dashboard() {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const { displayCurrency, setDisplayCurrency, isConverting, setIsConverting } = useCurrency();
   const navigate = useNavigate();
-  const [displayCurrency, setDisplayCurrency] = useState('USD');
   const [portfolioMetrics, setPortfolioMetrics] = useState<PortfolioMetrics | null>(null);
   const [originalMetrics, setOriginalMetrics] = useState<PortfolioMetrics | null>(null); // Store original USD metrics
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isConverting, setIsConverting] = useState(false);
   
   // Use backend currency rates hook
   const { convertAmount } = useBackendCurrencyRates();
@@ -248,52 +248,23 @@ export default function Dashboard() {
     }
   };
 
-  const handleCurrencyChange = (currency: string) => {
-    // Ensure currency is a string
-    const currencyString = typeof currency === 'string' ? currency : String(currency);
-    
-    // Validate currency code (should be 3 characters)
-    if (!currencyString || currencyString.length !== 3) {
-      console.error('Invalid currency code:', currencyString);
-      return;
-    }
-    
-    setDisplayCurrency(currencyString);
-    localStorage.setItem('displayCurrency', currencyString);
-    
-    if (originalMetrics) {
-      convertPortfolioMetrics(currencyString);
-    }
-  };
+
 
   const refreshData = () => {
     loadPortfolioMetrics();
   };
 
-  // Initialize with saved currency on mount
+  // Initialize on mount
   useEffect(() => {
-    const savedCurrency = localStorage.getItem('displayCurrency') || 'USD';
-    
-    // Ensure saved currency is a valid string
-    const safeCurrency = typeof savedCurrency === 'string' && savedCurrency.length === 3 ? savedCurrency : 'USD';
-    
-    // If we had to fix the currency, save the corrected version
-    if (safeCurrency !== savedCurrency) {
-      localStorage.setItem('displayCurrency', safeCurrency);
-    }
-    
-    setDisplayCurrency(safeCurrency);
-    loadPortfolioMetrics(safeCurrency); // Pass the currency to load and convert immediately
+    loadPortfolioMetrics(displayCurrency); // Pass the currency to load and convert immediately
   }, []);
 
-  // Convert metrics when currency changes (but not on initial load)
+  // Convert metrics when currency changes
   useEffect(() => {
     if (originalMetrics && displayCurrency) {
-      // Only convert if this is not the initial load
-      // (initial load is handled in loadPortfolioMetrics)
       convertPortfolioMetrics(displayCurrency);
     }
-  }, [displayCurrency]); // Removed originalMetrics dependency to avoid double conversion
+  }, [displayCurrency, originalMetrics]);
 
   if (loading) {
     return (
@@ -356,32 +327,6 @@ export default function Dashboard() {
         </div>
         
         <div className="flex items-center space-x-3">
-          {/* Currency Selector */}
-          <div className="flex items-center space-x-2">
-            <span className="text-sm text-gray-600 dark:text-gray-400">Display in:</span>
-            <select
-              value={displayCurrency}
-              onChange={(e) => handleCurrencyChange(e.target.value)}
-              className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={isConverting}
-            >
-              {CURRENCIES.map((currency) => (
-                <option key={currency.code} value={currency.code}>
-                  {currency.code} - {currency.symbol}
-                </option>
-              ))}
-            </select>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={refreshData}
-              disabled={loading}
-              className="h-8 w-8 p-0"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            </Button>
-          </div>
-
           <Button className="flex items-center gap-2" onClick={handleAddAsset}>
             <PlusIcon className="h-4 w-4" />
             {t('dashboard.addAsset')}
@@ -618,31 +563,34 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Performance Chart Placeholder */}
+      {/* Asset Allocation Chart */}
       <Card className="p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            {t('dashboard.portfolioGrowth')}
+            {t('dashboard.assetAllocation')}
           </h3>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm">1M</Button>
-            <Button variant="outline" size="sm">3M</Button>
-            <Button variant="outline" size="sm">6M</Button>
-            <Button size="sm">1Y</Button>
-          </div>
+          <Button variant="outline" size="sm" onClick={handleViewAnalytics}>
+            <BarChart3 className="h-4 w-4 mr-2" />
+            {t('navigation.analytics')}
+          </Button>
         </div>
         
-        <div className="h-64 bg-gray-50 dark:bg-gray-800 rounded-lg flex items-center justify-center">
-          <div className="text-center">
-            <TrendingUpIcon className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-            <p className="text-gray-500 dark:text-gray-400">
-              Portfolio performance chart will be displayed here
-            </p>
-            <p className="text-sm text-gray-400 mt-1">
-              Chart library integration needed
-            </p>
+        {portfolioMetrics?.assetAllocation && portfolioMetrics.assetAllocation.length > 0 ? (
+          <AssetAllocationChart 
+            data={portfolioMetrics.assetAllocation} 
+            currency={displayCurrency}
+            height={300}
+          />
+        ) : (
+          <div className="h-64 bg-gray-50 dark:bg-gray-800 rounded-lg flex items-center justify-center">
+            <div className="text-center">
+              <PieChartIcon className="h-12 w-12 text-gray-400 mx-auto mb-2" />
+              <p className="text-gray-500 dark:text-gray-400">
+                {t('dashboard.noDataDescription')}
+              </p>
+            </div>
           </div>
-        </div>
+        )}
       </Card>
 
       {/* Quick Actions */}

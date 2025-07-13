@@ -166,15 +166,19 @@ export class AnalyticsService {
       returnPercent: asset.gainLossPercentage,
     }));
 
-    const bestAsset = assetPerformances.reduce((best, current) => 
-      current.returnPercent > best.returnPercent ? current : best,
-      assetPerformances[0]
-    );
+    const bestAsset = assetPerformances.length > 0 
+      ? assetPerformances.reduce((best, current) => 
+          current.returnPercent > best.returnPercent ? current : best,
+          assetPerformances[0]
+        )
+      : null;
 
-    const worstAsset = assetPerformances.reduce((worst, current) => 
-      current.returnPercent < worst.returnPercent ? current : worst,
-      assetPerformances[0]
-    );
+    const worstAsset = assetPerformances.length > 0
+      ? assetPerformances.reduce((worst, current) => 
+          current.returnPercent < worst.returnPercent ? current : worst,
+          assetPerformances[0]
+        )
+      : null;
 
     // Placeholder calculations for advanced metrics
     const sharpeRatio = this.calculateSharpeRatio(assets);

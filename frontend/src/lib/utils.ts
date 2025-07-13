@@ -12,7 +12,10 @@ export function formatCurrency(amount: number, currency = 'USD'): string {
   }).format(amount)
 }
 
-export function formatPercentage(value: number, decimals = 2): string {
+export function formatPercentage(value: number | null | undefined, decimals = 2): string {
+  if (value === null || value === undefined || isNaN(value)) {
+    return '0.00%'
+  }
   return `${value.toFixed(decimals)}%`
 }
 

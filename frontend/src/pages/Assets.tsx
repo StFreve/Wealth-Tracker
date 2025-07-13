@@ -5,10 +5,10 @@ import { Button } from '@/components/ui/Button'
 import { AddAssetModal } from '@/components/AddAssetModal'
 import { EditAssetModal } from '@/components/EditAssetModal'
 import { CurrencyStatus } from '@/components/CurrencyStatus'
-import { CURRENCIES } from '@/lib/currency'
 import { useBackendCurrencyRates } from '@/hooks/useBackendCurrencyRates'
 import { useBackendStockPrice } from '@/hooks/useBackendStockPrice'
 import { useAuth } from '@/contexts/AuthContext'
+import { useCurrency } from '@/contexts/CurrencyContext'
 import { assetsApi, Asset } from '@/lib/api/assetsApi'
 import { portfolioApi, PortfolioMetrics } from '@/lib/api/portfolioApi'
 import { 
@@ -609,18 +609,14 @@ function AssetCard({
 function Assets() {
   const { t } = useTranslation()
   const { isAuthenticated, user } = useAuth()
+  const { displayCurrency, setDisplayCurrency, isConverting, setIsConverting } = useCurrency()
   const [assets, setAssets] = useState<Asset[]>([])
   const [convertedAssets, setConvertedAssets] = useState<Asset[]>([])
   const [portfolioMetrics, setPortfolioMetrics] = useState<PortfolioMetrics | null>(null)
-  const [displayCurrency, setDisplayCurrency] = useState(() => {
-    // Load saved currency from localStorage or default to USD
-    return localStorage.getItem('displayCurrency') || 'USD'
-  })
   const [showAddModal, setShowAddModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null)
   const [copyingAsset, setCopyingAsset] = useState<Asset | null>(null)
-  const [isConverting, setIsConverting] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
@@ -1187,17 +1183,13 @@ function Assets() {
     }
   }
 
-  const handleCurrencyChange = (currency: string) => {
-    // Save selected currency to localStorage
-    localStorage.setItem('displayCurrency', currency)
-    updateDisplayCurrency(currency)
-  }
+
 
   const refreshRates = () => {
     updateDisplayCurrency(displayCurrency)
   }
 
-  // Initialize with saved currency conversion on mount and load assets
+  // Initialize on mount
   useEffect(() => {
     loadAssets()
     loadPortfolioMetrics()
@@ -1206,18 +1198,16 @@ function Assets() {
   // Load assets when component mounts and convert to display currency
   useEffect(() => {
     if (assets.length > 0) {
-      // Currency is already set from localStorage in state initialization
-      // Just convert the assets to the display currency
       updateDisplayCurrency(displayCurrency)
     }
-  }, [assets.length])
+  }, [assets.length, displayCurrency])
 
   // Convert portfolio metrics when currency changes
   useEffect(() => {
     if (portfolioMetrics && displayCurrency) {
       convertPortfolioMetrics(portfolioMetrics, displayCurrency)
     }
-  }, [displayCurrency]) // Only depend on displayCurrency, not portfolioMetrics
+  }, [displayCurrency, portfolioMetrics])
 
   const getTotalValue = () => {
     // Use backend portfolio metrics for consistent totals with Dashboard
@@ -1432,32 +1422,6 @@ function Assets() {
         </div>
         
         <div className="flex items-center space-x-3">
-          {/* Currency Selector */}
-          <div className="flex items-center space-x-2">
-            <span className="text-sm text-muted-foreground">Display in:</span>
-            <select
-              value={displayCurrency}
-              onChange={(e) => handleCurrencyChange(e.target.value)}
-              className="px-3 py-1 border border-input rounded-md bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              disabled={isConverting}
-            >
-              {CURRENCIES.map((currency) => (
-                <option key={currency.code} value={currency.code}>
-                  {currency.code} - {currency.symbol}
-                </option>
-              ))}
-            </select>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={refreshRates}
-              disabled={isConverting}
-              className="h-8 w-8 p-0"
-            >
-              <RefreshCw className={`h-4 w-4 ${isConverting ? 'animate-spin' : ''}`} />
-            </Button>
-          </div>
-          
           <Button className="flex items-center space-x-2" onClick={handleAddAsset}>
             <Plus className="h-4 w-4" />
             <span>{t('assets.addNewAsset')}</span>

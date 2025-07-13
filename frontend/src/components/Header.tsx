@@ -1,8 +1,10 @@
 import { Bell, Sun, Moon, User, Settings, LogOut } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useAuth } from '@/contexts/AuthContext'
+import { useCurrency } from '@/contexts/CurrencyContext'
 import { useTranslation } from 'react-i18next'
 import { Button } from './ui/Button'
+import { CurrencySelector } from './CurrencySelector'
 import { 
   DropdownMenu,
   DropdownMenuTrigger,
@@ -15,6 +17,7 @@ import {
 export function Header() {
   const { theme, setTheme, effectiveTheme } = useTheme()
   const { user, logout } = useAuth()
+  const { displayCurrency, setDisplayCurrency, isConverting } = useCurrency()
   const { t } = useTranslation()
 
   const toggleTheme = () => {
@@ -31,6 +34,13 @@ export function Header() {
         </div>
 
         <div className="flex items-center space-x-4">
+          {/* Currency Selector */}
+          <CurrencySelector
+            displayCurrency={displayCurrency}
+            onCurrencyChange={setDisplayCurrency}
+            isConverting={isConverting}
+          />
+
           {/* Theme Toggle */}
           <Button
             variant="ghost"

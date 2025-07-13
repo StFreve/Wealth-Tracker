@@ -35,7 +35,7 @@ export class MarketDataController {
     @Query('to') to: string,
   ) {
     try {
-      if (!amount || !from || !to) {
+      if (amount === undefined || amount === null || !from || !to) {
         throw new HttpException(
           'Missing required parameters: amount, from, to',
           HttpStatus.BAD_REQUEST,

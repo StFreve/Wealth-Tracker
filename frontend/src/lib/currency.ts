@@ -367,7 +367,11 @@ export function getCurrencySymbol(currency: string): string {
 /**
  * Formats amount with currency symbol
  */
-export function formatWithSymbol(amount: number, currency: string): string {
+export function formatWithSymbol(amount: number | null | undefined, currency: string): string {
+  if (amount === null || amount === undefined || isNaN(amount)) {
+    const symbol = getCurrencySymbol(currency)
+    return `${symbol}0.00`
+  }
   const symbol = getCurrencySymbol(currency)
   return `${symbol}${amount.toFixed(2)}`
 }

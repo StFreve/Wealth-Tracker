@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from 'react-query'
 import { Suspense } from 'react'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import { AuthProvider } from '@/contexts/AuthContext'
+import { CurrencyProvider } from '@/contexts/CurrencyContext'
 import { Layout } from '@/components/Layout'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 
@@ -32,25 +33,27 @@ function App() {
       <ThemeProvider>
         <Router>
           <AuthProvider>
-            <div className="min-h-screen bg-background">
-              <Suspense fallback={<LoadingSpinner />}>
-                <Routes>
-                  {/* Public routes */}
-                  <Route path="/login" element={<Login />} />
-                  <Route path="/register" element={<Register />} />
-                  <Route path="/widget/:widgetId" element={<Widget />} />
-                  
-                  {/* Protected routes */}
-                  <Route path="/" element={<Layout />}>
-                    <Route index element={<Dashboard />} />
-                    <Route path="/dashboard" element={<Dashboard />} />
-                    <Route path="/assets" element={<Assets />} />
-                    <Route path="/analytics" element={<Analytics />} />
-                    <Route path="/settings" element={<Settings />} />
-                  </Route>
-                </Routes>
-              </Suspense>
-            </div>
+            <CurrencyProvider>
+              <div className="min-h-screen bg-background">
+                <Suspense fallback={<LoadingSpinner />}>
+                  <Routes>
+                    {/* Public routes */}
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/register" element={<Register />} />
+                    <Route path="/widget/:widgetId" element={<Widget />} />
+                    
+                    {/* Protected routes */}
+                    <Route path="/" element={<Layout />}>
+                      <Route index element={<Dashboard />} />
+                      <Route path="/dashboard" element={<Dashboard />} />
+                      <Route path="/assets" element={<Assets />} />
+                      <Route path="/analytics" element={<Analytics />} />
+                      <Route path="/settings" element={<Settings />} />
+                    </Route>
+                  </Routes>
+                </Suspense>
+              </div>
+            </CurrencyProvider>
           </AuthProvider>
         </Router>
       </ThemeProvider>
