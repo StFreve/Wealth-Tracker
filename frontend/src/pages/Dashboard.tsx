@@ -509,89 +509,7 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Asset Allocation */}
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              {t('dashboard.assetAllocation')}
-            </h3>
-            <Button variant="outline" size="sm" onClick={handleViewAllAssets}>
-              {t('common.viewAll')}
-            </Button>
-          </div>
-          
-          <div className="space-y-4">
-            {portfolioMetrics.assetAllocation.map((allocation, index) => (
-              <div key={allocation.type} className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div 
-                    className="w-4 h-4 rounded-full"
-                    style={{ 
-                      backgroundColor: `hsl(${index * 90 + 210}, 70%, 50%)` 
-                    }}
-                  />
-                  <span className="text-sm text-gray-600 dark:text-gray-400">
-                    {allocation.type}
-                  </span>
-                </div>
-                <div className="text-right">
-                  <div className="text-sm font-medium text-gray-900 dark:text-white">
-                    {formatCurrency(allocation.value)}
-                  </div>
-                  <div className="text-xs text-gray-500 flex items-center gap-1">
-                    {allocation.percentage.toFixed(1)}% • {allocation.count} assets
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
 
-        {/* Recent Transactions */}
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              {t('dashboard.recentTransactions')}
-            </h3>
-            <Button variant="outline" size="sm" onClick={handleViewAllAssets}>
-              {t('common.viewAll')}
-            </Button>
-          </div>
-          
-          <div className="space-y-4">
-            {portfolioMetrics.recentTransactions.length === 0 ? (
-              <p className="text-gray-500 text-center py-4">
-                {t('dashboard.noRecentTransactions')}
-              </p>
-            ) : (
-              portfolioMetrics.recentTransactions.map((transaction) => (
-                <div key={transaction.id} className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-medium text-gray-900 dark:text-white">
-                      {transaction.assetName}
-                    </div>
-                    <div className="text-xs text-gray-500 flex items-center gap-2">
-                      {new Date(transaction.date).toLocaleDateString()} • {transaction.type}
-                      {transaction.quantity && ` • ${transaction.quantity} shares`}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className={`text-sm font-medium ${
-                      transaction.type === 'buy' || transaction.type === 'deposit'
-                        ? 'text-red-600' 
-                        : 'text-green-600'
-                    }`}>
-                      {(transaction.type === 'buy' || transaction.type === 'deposit') ? '-' : '+'}
-                      {formatCurrency(transaction.amount)}
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </Card>
-      </div>
 
       {/* Wealth Change Over Time Chart */}
       <Card className="p-6">
@@ -623,31 +541,7 @@ export default function Dashboard() {
         )}
       </Card>
 
-      {/* Quick Actions */}
-      <Card className="p-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          {t('dashboard.quickActions')}
-        </h3>
-        
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Button variant="outline" className="h-20 flex-col gap-2" onClick={handleAddAsset}>
-            <PlusIcon className="h-6 w-6" />
-            <span className="text-xs">{t('assets.addNewAsset')}</span>
-          </Button>
-          <Button variant="outline" className="h-20 flex-col gap-2" onClick={handleViewAnalytics}>
-            <BarChart3 className="h-6 w-6" />
-            <span className="text-xs">{t('navigation.analytics')}</span>
-          </Button>
-          <Button variant="outline" className="h-20 flex-col gap-2" onClick={handleCreateWidget}>
-            <PieChartIcon className="h-6 w-6" />
-            <span className="text-xs">{t('widgets.createWidget')}</span>
-          </Button>
-          <Button variant="outline" className="h-20 flex-col gap-2" onClick={handleViewAllAssets}>
-            <DollarSignIcon className="h-6 w-6" />
-            <span className="text-xs">{t('assets.viewAllAssets')}</span>
-          </Button>
-        </div>
-      </Card>
+
     </div>
   );
 } 
