@@ -38,7 +38,8 @@
     "yearly": "Ежегодно",
     "allTime": "За все время",
     "viewAll": "Показать все",
-    "optional": "Необязательно"
+    "optional": "Необязательно",
+    "tryAgain": "Попробовать снова"
   },
   "auth": {
     "signIn": "Вход",
@@ -76,7 +77,12 @@
     "totalAssets": "Всего активов",
     "monthlyChange": "Изменение за месяц",
     "yearlyChange": "Изменение за год",
+    "totalGainLoss": "Общая прибыль/убыток",
+    "totalInvestment": "Общие инвестиции",
+    "monthlyRecurringIncome": "Ежемесячный регулярный доход",
+    "annualRecurringIncome": "Годовой регулярный доход",
     "recentTransactions": "Последние транзакции",
+    "noRecentTransactions": "Нет последних транзакций",
     "assetAllocation": "Распределение активов",
     "performanceOverview": "Обзор доходности",
     "quickActions": "Быстрые действия",
@@ -85,7 +91,10 @@
     "noAssetsYet": "Активы еще не добавлены",
     "addFirstAsset": "Добавьте ваш первый актив для начала",
     "portfolioGrowth": "Рост портфеля",
-    "diversification": "Диверсификация"
+    "diversification": "Диверсификация",
+    "errorTitle": "Не удалось загрузить данные",
+    "noData": "Нет данных портфеля",
+    "noDataDescription": "Начните строить свой портфель, добавив свой первый актив."
   },
   "assets": {
     "title": "Активы",

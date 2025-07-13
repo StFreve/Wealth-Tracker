@@ -38,7 +38,8 @@
     "yearly": "Yearly",
     "allTime": "All Time",
     "viewAll": "View All",
-    "optional": "Optional"
+    "optional": "Optional",
+    "tryAgain": "Try Again"
   },
   "auth": {
     "signIn": "Sign In",
@@ -76,7 +77,12 @@
     "totalAssets": "Total Assets",
     "monthlyChange": "Monthly Change",
     "yearlyChange": "Yearly Change",
+    "totalGainLoss": "Total Gain/Loss",
+    "totalInvestment": "Total Investment",
+    "monthlyRecurringIncome": "Monthly Recurring Income",
+    "annualRecurringIncome": "Annual Recurring Income",
     "recentTransactions": "Recent Transactions",
+    "noRecentTransactions": "No recent transactions",
     "assetAllocation": "Asset Allocation",
     "performanceOverview": "Performance Overview",
     "quickActions": "Quick Actions",
@@ -85,7 +91,10 @@
     "noAssetsYet": "No assets added yet",
     "addFirstAsset": "Add your first asset to get started",
     "portfolioGrowth": "Portfolio Growth",
-    "diversification": "Diversification"
+    "diversification": "Diversification",
+    "errorTitle": "Failed to Load Data",
+    "noData": "No Portfolio Data",
+    "noDataDescription": "Start building your portfolio by adding your first asset."
   },
   "assets": {
     "title": "Assets",

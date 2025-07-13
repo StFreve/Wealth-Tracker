@@ -10,6 +10,7 @@ import { useBackendCurrencyRates } from '@/hooks/useBackendCurrencyRates'
 import { useBackendStockPrice } from '@/hooks/useBackendStockPrice'
 import { useAuth } from '@/contexts/AuthContext'
 import { assetsApi, Asset } from '@/lib/api/assetsApi'
+import { portfolioApi, PortfolioMetrics } from '@/lib/api/portfolioApi'
 import { 
   Plus, 
   Edit, 
@@ -610,6 +611,7 @@ function Assets() {
   const { isAuthenticated, user } = useAuth()
   const [assets, setAssets] = useState<Asset[]>([])
   const [convertedAssets, setConvertedAssets] = useState<Asset[]>([])
+  const [portfolioMetrics, setPortfolioMetrics] = useState<PortfolioMetrics | null>(null)
   const [displayCurrency, setDisplayCurrency] = useState(() => {
     // Load saved currency from localStorage or default to USD
     return localStorage.getItem('displayCurrency') || 'USD'
@@ -678,6 +680,47 @@ function Assets() {
       console.error('Failed to load assets:', err)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  // Load portfolio metrics from backend (for consistent totals with Dashboard)
+  const loadPortfolioMetrics = async () => {
+    try {
+      const metrics = await portfolioApi.getPortfolioMetrics()
+      // If display currency is not USD, convert the metrics immediately
+      if (displayCurrency !== 'USD') {
+        await convertPortfolioMetrics(metrics, displayCurrency)
+      } else {
+        setPortfolioMetrics(metrics)
+      }
+    } catch (err) {
+      console.error('Failed to load portfolio metrics:', err)
+      // Don't set error here as it's not critical for Assets page functionality
+    }
+  }
+
+  // Convert portfolio metrics to display currency (similar to Dashboard)
+  const convertPortfolioMetrics = async (metrics: PortfolioMetrics, targetCurrency: string) => {
+    if (targetCurrency === 'USD') {
+      setPortfolioMetrics(metrics)
+      return
+    }
+
+    try {
+      // Convert main metrics from USD to target currency
+      const convertedTotalValue = await convertAmount(metrics.totalValue, 'USD', targetCurrency)
+      const convertedTotalGainLoss = await convertAmount(metrics.totalGainLoss, 'USD', targetCurrency)
+      const convertedMonthlyChange = await convertAmount(metrics.monthlyChange, 'USD', targetCurrency)
+
+      setPortfolioMetrics({
+        ...metrics,
+        totalValue: convertedTotalValue,
+        totalGainLoss: convertedTotalGainLoss,
+        monthlyChange: convertedMonthlyChange
+      })
+    } catch (error) {
+      console.error('Failed to convert portfolio metrics:', error)
+      setPortfolioMetrics(metrics) // Fallback to original metrics
     }
   }
 
@@ -797,6 +840,9 @@ function Assets() {
       // Update converted assets
       const updatedAssets = [...assets, createdAsset]
       await updateDisplayCurrency(displayCurrency, updatedAssets)
+      
+      // Refresh portfolio metrics for consistent totals
+      await loadPortfolioMetrics()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create asset')
       console.error('Failed to create asset:', err)
@@ -899,6 +945,9 @@ function Assets() {
       // Update converted assets
       const updatedAssets = assets.map(asset => asset.id === savedAsset.id ? savedAsset : asset)
       await updateDisplayCurrency(displayCurrency, updatedAssets)
+      
+      // Refresh portfolio metrics for consistent totals
+      await loadPortfolioMetrics()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update asset')
       console.error('Failed to update asset:', err)
@@ -918,6 +967,9 @@ function Assets() {
       const updatedAssets = assets.filter(asset => asset.id !== assetId)
       setAssets(updatedAssets)
       await updateDisplayCurrency(displayCurrency, updatedAssets)
+      
+      // Refresh portfolio metrics for consistent totals
+      await loadPortfolioMetrics()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete asset')
       console.error('Failed to delete asset:', err)
@@ -1145,21 +1197,34 @@ function Assets() {
     updateDisplayCurrency(displayCurrency)
   }
 
-  // Initialize with USD conversion on mount and load assets
+  // Initialize with saved currency conversion on mount and load assets
   useEffect(() => {
     loadAssets()
+    loadPortfolioMetrics()
   }, [])
 
-  // Load assets when component mounts
+  // Load assets when component mounts and convert to display currency
   useEffect(() => {
     if (assets.length > 0) {
-      // Use saved currency from localStorage or default to USD
-      const savedCurrency = localStorage.getItem('displayCurrency') || 'USD'
-      updateDisplayCurrency(savedCurrency)
+      // Currency is already set from localStorage in state initialization
+      // Just convert the assets to the display currency
+      updateDisplayCurrency(displayCurrency)
     }
   }, [assets.length])
 
+  // Convert portfolio metrics when currency changes
+  useEffect(() => {
+    if (portfolioMetrics && displayCurrency) {
+      convertPortfolioMetrics(portfolioMetrics, displayCurrency)
+    }
+  }, [displayCurrency]) // Only depend on displayCurrency, not portfolioMetrics
+
   const getTotalValue = () => {
+    // Use backend portfolio metrics for consistent totals with Dashboard
+    if (portfolioMetrics) {
+      return portfolioMetrics.totalValue
+    }
+    // Fallback to frontend calculation if portfolio metrics not available
     return convertedAssets
       .filter(asset => asset.type !== 'recurringIncome')
       .reduce((sum, asset) => {
@@ -1168,6 +1233,11 @@ function Assets() {
   }
 
   const getTotalGain = () => {
+    // Use backend portfolio metrics for consistent totals with Dashboard
+    if (portfolioMetrics) {
+      return portfolioMetrics.totalGainLoss
+    }
+    // Fallback to frontend calculation if portfolio metrics not available
     return convertedAssets
       .filter(asset => asset.type !== 'recurringIncome')
       .reduce((sum, asset) => {
@@ -1225,6 +1295,12 @@ function Assets() {
   }
 
   const getLastMonthProfitLoss = () => {
+    // Use backend portfolio metrics for consistent totals with Dashboard
+    if (portfolioMetrics) {
+      return portfolioMetrics.monthlyChange
+    }
+    
+    // Fallback to frontend calculation if portfolio metrics not available
     if (convertedAssets.length === 0) return 0
     
     console.log('🔍 Debug: Starting monthly profit calculation')

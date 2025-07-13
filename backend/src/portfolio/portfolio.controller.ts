@@ -15,6 +15,11 @@ export class PortfolioController {
     return this.portfolioService.findAll(req.user.id);
   }
 
+  @Get('metrics')
+  getPortfolioMetrics(@Request() req) {
+    return this.portfolioService.getPortfolioMetrics(req.user.id);
+  }
+
   @Post()
   create(@Body() createPortfolioDto: any, @Request() req) {
     return this.portfolioService.create({
