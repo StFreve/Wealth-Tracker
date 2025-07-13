@@ -16,8 +16,10 @@ export class PortfolioController {
   }
 
   @Get('metrics')
-  getPortfolioMetrics(@Request() req) {
-    return this.portfolioService.getPortfolioMetrics(req.user.id);
+  async getPortfolioMetrics(@Request() req) {
+    const metrics = await this.portfolioService.getPortfolioMetrics(req.user.id);
+
+    return metrics;
   }
 
   @Post()

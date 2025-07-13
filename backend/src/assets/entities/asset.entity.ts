@@ -175,43 +175,124 @@ export class Asset {
 
   // Calculated properties
   get currentValue(): number {
-    if (this.type === AssetType.STOCK && this.currentPrice && this.quantity) {
-      return this.currentPrice * this.quantity;
-    }
-    
-    if (this.type === AssetType.DEPOSIT && this.principal && this.interestRate) {
-      // Calculate compound interest if applicable
-      const now = new Date();
-      const startDate = this.startDate || this.createdAt;
-      const daysDiff = Math.max(0, (now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-      const yearsFraction = daysDiff / 365;
-      
-      if (this.compounding === CompoundingType.COMPOUND) {
-        return this.principal * Math.pow(1 + (this.interestRate / 100), yearsFraction);
-      } else {
-        return this.principal * (1 + (this.interestRate / 100) * yearsFraction);
+    // Helper function to safely convert to number
+    const safeNumber = (value: any): number => {
+      const num = Number(value);
+      return isNaN(num) ? 0 : num;
+    };
+
+    if (this.type === AssetType.STOCK) {
+      const currentPrice = safeNumber(this.currentPrice);
+      const quantity = safeNumber(this.quantity);
+      if (currentPrice > 0 && quantity > 0) {
+        return currentPrice * quantity;
       }
     }
     
-    if (this.type === AssetType.PRECIOUS_METAL && this.currentPrice && this.weight) {
-      return this.currentPrice * this.weight;
+    if (this.type === AssetType.DEPOSIT) {
+      const principal = safeNumber(this.principal);
+      const interestRate = safeNumber(this.interestRate);
+      if (principal > 0 && interestRate > 0) {
+        // Calculate compound interest if applicable
+        const now = new Date();
+        const startDate = this.startDate || this.createdAt;
+        const daysDiff = Math.max(0, (now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+        const yearsFraction = daysDiff / 365;
+        
+        if (this.compounding === CompoundingType.COMPOUND) {
+          return principal * Math.pow(1 + (interestRate / 100), yearsFraction);
+        } else {
+          return principal * (1 + (interestRate / 100) * yearsFraction);
+        }
+      }
+      return principal; // Return principal if no interest calculation possible
     }
     
-    if (this.type === AssetType.CASH && this.acquisitionCost) {
-      return this.acquisitionCost;
+    if (this.type === AssetType.PRECIOUS_METAL) {
+      const currentPrice = safeNumber(this.currentPrice);
+      const weight = safeNumber(this.weight);
+      if (currentPrice > 0 && weight > 0) {
+        return currentPrice * weight;
+      }
+      // Fallback to acquisition cost if no current price
+      return safeNumber(this.acquisitionCost);
     }
     
-    return this.purchasePrice * this.quantity || 0;
+    if (this.type === AssetType.CASH) {
+      return safeNumber(this.acquisitionCost);
+    }
+    
+    if (this.type === AssetType.RECURRING_INCOME) {
+      return 0; // Recurring income doesn't have a current value
+    }
+    
+    // Fallback for other types
+    const purchasePrice = safeNumber(this.purchasePrice);
+    const quantity = safeNumber(this.quantity);
+    return purchasePrice * quantity;
   }
 
   get totalGainLoss(): number {
     const currentVal = this.currentValue;
-    const purchaseVal = (this.purchasePrice || 0) * (this.quantity || 0);
+    
+    // Helper function to safely convert to number
+    const safeNumber = (value: any): number => {
+      const num = Number(value);
+      return isNaN(num) ? 0 : num;
+    };
+
+    let purchaseVal = 0;
+    
+    if (this.type === AssetType.STOCK) {
+      const purchasePrice = safeNumber(this.purchasePrice);
+      const quantity = safeNumber(this.quantity);
+      purchaseVal = purchasePrice * quantity;
+    } else if (this.type === AssetType.DEPOSIT) {
+      purchaseVal = safeNumber(this.principal);
+    } else if (this.type === AssetType.PRECIOUS_METAL) {
+      purchaseVal = safeNumber(this.acquisitionCost);
+    } else if (this.type === AssetType.CASH) {
+      purchaseVal = safeNumber(this.acquisitionCost);
+    } else if (this.type === AssetType.RECURRING_INCOME) {
+      return 0; // Recurring income doesn't have gain/loss
+    } else {
+      // Fallback for other types
+      const purchasePrice = safeNumber(this.purchasePrice);
+      const quantity = safeNumber(this.quantity);
+      purchaseVal = purchasePrice * quantity;
+    }
+    
     return currentVal - purchaseVal;
   }
 
   get gainLossPercentage(): number {
-    const purchaseVal = (this.purchasePrice || 0) * (this.quantity || 0);
+    // Helper function to safely convert to number
+    const safeNumber = (value: any): number => {
+      const num = Number(value);
+      return isNaN(num) ? 0 : num;
+    };
+
+    let purchaseVal = 0;
+    
+    if (this.type === AssetType.STOCK) {
+      const purchasePrice = safeNumber(this.purchasePrice);
+      const quantity = safeNumber(this.quantity);
+      purchaseVal = purchasePrice * quantity;
+    } else if (this.type === AssetType.DEPOSIT) {
+      purchaseVal = safeNumber(this.principal);
+    } else if (this.type === AssetType.PRECIOUS_METAL) {
+      purchaseVal = safeNumber(this.acquisitionCost);
+    } else if (this.type === AssetType.CASH) {
+      purchaseVal = safeNumber(this.acquisitionCost);
+    } else if (this.type === AssetType.RECURRING_INCOME) {
+      return 0; // Recurring income doesn't have gain/loss percentage
+    } else {
+      // Fallback for other types
+      const purchasePrice = safeNumber(this.purchasePrice);
+      const quantity = safeNumber(this.quantity);
+      purchaseVal = purchasePrice * quantity;
+    }
+    
     if (purchaseVal === 0) return 0;
     return (this.totalGainLoss / purchaseVal) * 100;
   }

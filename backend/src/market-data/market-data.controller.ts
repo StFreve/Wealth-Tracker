@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Param, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Query, Param, Body, HttpException, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery, ApiParam, ApiResponse } from '@nestjs/swagger';
 import { MarketDataService } from './market-data.service';
 
@@ -57,6 +57,38 @@ export class MarketDataController {
       }
       throw new HttpException(
         'Failed to convert currency',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post('currency/convert/batch')
+  @ApiOperation({ summary: 'Convert multiple amounts between currencies in a single request' })
+  @ApiResponse({ status: 200, description: 'Batch currency conversion completed' })
+  async convertCurrencyBatch(@Body() conversions: Array<{ amount: number; from: string; to: string }>) {
+    try {
+      if (!Array.isArray(conversions) || conversions.length === 0) {
+        throw new HttpException(
+          'Invalid conversions array',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      if (conversions.length > 50) {
+        throw new HttpException(
+          'Too many conversions. Maximum 50 conversions per request.',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      const results = await this.marketDataService.convertCurrencyBatch(conversions);
+      return { conversions: results };
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        'Failed to convert currencies in batch',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

@@ -45,11 +45,54 @@ export function useBackendCurrencyRates(autoRefresh: boolean = true): UseCurrenc
     await fetchCurrencyRates(true)
   }, [fetchCurrencyRates])
 
+  // Cache for currency conversions to avoid duplicate API calls
+  const conversionCache = new Map<string, number>()
+
   const convertAmount = useCallback(async (amount: number, from: string, to: string): Promise<number> => {
+    console.log(`🔄 convertAmount called: ${amount} ${from} -> ${to}`)
+    
+    // Handle null, undefined, or NaN values
+    if (amount === null || amount === undefined || isNaN(amount)) {
+      console.log(`⚠️ Amount is null/undefined/NaN, returning 0`)
+      return 0
+    }
+    
+    // Return original amount if currencies are the same
+    if (from === to) {
+      console.log(`✅ Same currency, returning original amount: ${amount}`)
+      return amount
+    }
+
+    // Return 0 if amount is 0 to avoid unnecessary API calls
+    if (amount === 0) {
+      console.log(`✅ Amount is 0, returning 0`)
+      return 0
+    }
+
+    // Create cache key
+    const cacheKey = `${amount}-${from}-${to}`
+    console.log(`🔍 Cache key: ${cacheKey}`)
+    
+    // Check cache first
+    if (conversionCache.has(cacheKey)) {
+      const cachedResult = conversionCache.get(cacheKey)!
+      console.log(`✅ Using cached result: ${cachedResult}`)
+      return cachedResult
+    }
+
     try {
+      console.log(`🌐 Making API call to convert ${amount} ${from} -> ${to}`)
       const result = await marketDataApi.convertCurrency(amount, from, to)
-      return result.convertedAmount
+      const convertedAmount = result.convertedAmount
+      
+      console.log(`✅ API conversion result: ${convertedAmount}`)
+      
+      // Cache the result
+      conversionCache.set(cacheKey, convertedAmount)
+      
+      return convertedAmount
     } catch (err) {
+      console.error(`❌ Conversion failed: ${err}`)
       throw new Error(`Currency conversion failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
   }, [])

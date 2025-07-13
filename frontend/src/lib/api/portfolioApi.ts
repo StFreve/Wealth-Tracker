@@ -12,6 +12,7 @@ export interface PortfolioMetrics {
   assetAllocation: AssetAllocation[];
   recentTransactions: RecentTransaction[];
   performanceMetrics: PerformanceMetrics;
+  originalUSDValues: PortfolioMetrics;
 }
 
 export interface AssetAllocation {
@@ -58,7 +59,20 @@ class PortfolioApi {
       throw new Error(`Failed to fetch portfolio metrics: ${response.statusText}`)
     }
 
-    return response.json()
+    const data = await response.json()
+    console.log('🔍 Frontend received portfolio metrics:', {
+      totalValue: data.totalValue,
+      totalGainLoss: data.totalGainLoss,
+      monthlyChange: data.monthlyChange,
+      totalGainLossPercent: data.totalGainLossPercent,
+      monthlyChangePercent: data.monthlyChangePercent,
+      yearlyChange: data.yearlyChange,
+      yearlyChangePercent: data.yearlyChangePercent,
+      assetCount: data.assetCount,
+      assetAllocation: data.assetAllocation?.length || 0,
+      recentTransactions: data.recentTransactions?.length || 0
+    })
+    return data
   }
 
   async getPortfolioList(): Promise<any[]> {

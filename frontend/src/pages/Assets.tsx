@@ -21,14 +21,13 @@ import {
   Clock,
   Calendar,
   DollarSign,
-  Info,
   AlertCircle,
   Settings,
   ChevronDown,
   ChevronRight,
   Copy
 } from 'lucide-react'
-import { formatCurrency, formatPercentage } from '@/lib/utils'
+import { formatPercentage } from '@/lib/utils'
 import { calculateDepositValue, formatDepositDuration, getDepositStatus, getInterestTypeInfo } from '@/lib/depositCalculations'
 import { calculateAfterTaxProfit } from '@/lib/taxCalculations'
 import { usersApi, TaxSettings } from '@/lib/api/usersApi'
@@ -138,7 +137,7 @@ interface CurrencyTooltipProps {
   exchangeRate?: number
 }
 
-function CurrencyTooltip({ children, originalAmount, originalCurrency, convertedAmount, convertedCurrency, exchangeRate }: CurrencyTooltipProps) {
+function CurrencyTooltip({ children, originalAmount, originalCurrency, convertedCurrency, exchangeRate }: CurrencyTooltipProps) {
   const [showTooltip, setShowTooltip] = useState(false)
   
   if (originalCurrency === convertedCurrency) {
@@ -176,7 +175,7 @@ interface StockPriceDisplayProps {
   displayCurrency: string
 }
 
-function StockPriceDisplay({ ticker, quantity, displayCurrency }: StockPriceDisplayProps) {
+function StockPriceDisplay({ ticker, quantity }: StockPriceDisplayProps) {
   const { stockPrice, isLoading, error } = useBackendStockPrice(ticker)
   
   if (isLoading) {
@@ -258,37 +257,14 @@ function AssetCard({
   // Calculate after-tax profit
   const grossProfit = getDisplayGain(asset) // Already converted gain
   
-  // Get original gain for tax calculation
-  const originalGain = assetAny.originalGain || assetAny.gain || grossProfit
-  
-  // Calculate tax on original gain, then convert to display currency
-  const originalTaxCalculation = calculateAfterTaxProfit(
+  // Calculate tax directly on the converted gross profit
+  // This is simpler and more accurate than trying to convert tax amounts
+  const taxCalculation = calculateAfterTaxProfit(
     asset.type,
     asset.type === 'deposit' ? 'interest' : 'capital_gains',
-    originalGain,
+    grossProfit,
     user?.preferences?.taxSettings
   )
-  
-  // If currency conversion was applied, convert tax amounts
-  let taxCalculation
-  if (assetAny.originalCurrency && assetAny.originalCurrency !== displayCurrency && originalGain !== 0) {
-    // Tax was calculated on original amount, so convert the tax and net amounts
-    const conversionRatio = grossProfit / originalGain
-    taxCalculation = {
-      grossProfit: grossProfit,
-      taxAmount: originalTaxCalculation.taxAmount * Math.abs(conversionRatio),
-      netProfit: originalTaxCalculation.netProfit * conversionRatio,
-      taxRate: originalTaxCalculation.taxRate
-    }
-  } else {
-    // No conversion needed
-    taxCalculation = {
-      grossProfit: grossProfit,
-      taxAmount: originalTaxCalculation.taxAmount,
-      netProfit: originalTaxCalculation.netProfit,
-      taxRate: originalTaxCalculation.taxRate
-    }
-  }
   
   return (
     <Card className="asset-card">
@@ -608,10 +584,11 @@ function AssetCard({
 
 function Assets() {
   const { t } = useTranslation()
-  const { isAuthenticated, user } = useAuth()
+  const { user } = useAuth()
   const { displayCurrency, setDisplayCurrency, isConverting, setIsConverting } = useCurrency()
   const [assets, setAssets] = useState<Asset[]>([])
   const [convertedAssets, setConvertedAssets] = useState<Asset[]>([])
+  const [portfolioMetricsOriginal, setPortfolioMetricsOriginal] = useState<PortfolioMetrics | null>(null)
   const [portfolioMetrics, setPortfolioMetrics] = useState<PortfolioMetrics | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
@@ -683,39 +660,58 @@ function Assets() {
   const loadPortfolioMetrics = async () => {
     try {
       const metrics = await portfolioApi.getPortfolioMetrics()
+      
       // If display currency is not USD, convert the metrics immediately
+      setPortfolioMetricsOriginal(metrics)
+      
       if (displayCurrency !== 'USD') {
         await convertPortfolioMetrics(metrics, displayCurrency)
       } else {
         setPortfolioMetrics(metrics)
       }
     } catch (err) {
-      console.error('Failed to load portfolio metrics:', err)
-      // Don't set error here as it's not critical for Assets page functionality
+      console.error('❌ Failed to load portfolio metrics:', err)
+      // Set portfolio metrics to null to indicate failure
+      setPortfolioMetricsOriginal(null)
     }
   }
 
   // Convert portfolio metrics to display currency (similar to Dashboard)
   const convertPortfolioMetrics = async (metrics: PortfolioMetrics, targetCurrency: string) => {
     if (targetCurrency === 'USD') {
-      setPortfolioMetrics(metrics)
+      setPortfolioMetrics(metrics?.originalUSDValues || metrics)
       return
     }
 
     try {
-      // Convert main metrics from USD to target currency
-      const convertedTotalValue = await convertAmount(metrics.totalValue, 'USD', targetCurrency)
-      const convertedTotalGainLoss = await convertAmount(metrics.totalGainLoss, 'USD', targetCurrency)
-      const convertedMonthlyChange = await convertAmount(metrics.monthlyChange, 'USD', targetCurrency)
+      // Always convert from the original USD values, not from already-converted values
+      // Store the original USD metrics separately to prevent compounding conversions
+      const originalUSDMetrics = {
+        totalValue: metrics.totalValue,
+        totalGainLoss: metrics.totalGainLoss,
+        monthlyChange: metrics.monthlyChange,
+        yearlyChange: metrics.yearlyChange
+      }
 
-      setPortfolioMetrics({
+      // Convert main metrics from USD to target currency
+      const convertedTotalValue = await convertAmount(originalUSDMetrics.totalValue, 'USD', targetCurrency)
+      const convertedTotalGainLoss = await convertAmount(originalUSDMetrics.totalGainLoss, 'USD', targetCurrency)
+      const convertedMonthlyChange = await convertAmount(originalUSDMetrics.monthlyChange, 'USD', targetCurrency)
+      const convertedYearlyChange = await convertAmount(originalUSDMetrics.yearlyChange, 'USD', targetCurrency)
+
+      const convertedMetrics = {
         ...metrics,
         totalValue: convertedTotalValue,
         totalGainLoss: convertedTotalGainLoss,
-        monthlyChange: convertedMonthlyChange
-      })
+        monthlyChange: convertedMonthlyChange,
+        yearlyChange: convertedYearlyChange,
+        // Store original USD values to prevent compounding conversions
+        originalUSDValues: metrics.originalUSDValues || originalUSDMetrics
+      }
+      
+      setPortfolioMetrics(convertedMetrics)
     } catch (error) {
-      console.error('Failed to convert portfolio metrics:', error)
+      console.error('❌ Failed to convert portfolio metrics:', error)
       setPortfolioMetrics(metrics) // Fallback to original metrics
     }
   }
@@ -825,9 +821,7 @@ function Assets() {
         if (newAsset.value) backendAsset.acquisitionCost = newAsset.value
       }
 
-      // Debug logging
-      console.log('Frontend asset:', newAsset)
-      console.log('Backend asset:', backendAsset)
+
       
       const createdAsset = await assetsApi.createAsset(backendAsset)
       setAssets(prev => [...prev, createdAsset])
@@ -889,12 +883,6 @@ function Assets() {
           if (asset.startDate) backendAsset.startDate = asset.startDate
           if (asset.maturityDate) backendAsset.endDate = asset.maturityDate
           
-          // Debug logging
-          console.log('Frontend deposit fields:', {
-            compoundingFrequency: asset.compoundingFrequency,
-            interestType: asset.interestType
-          })
-          
           if (asset.compoundingFrequency) {
             // Make sure compoundingFrequency is a valid frequency, not the interest type
             const validFrequencies = ['daily', 'monthly', 'quarterly', 'annually']
@@ -902,13 +890,11 @@ function Assets() {
               ? asset.compoundingFrequency.toLowerCase() 
               : 'annually' // default fallback
             backendAsset.interestSchedule = frequency
-            console.log('Mapped interestSchedule:', frequency)
           }
           
           if (asset.interestType) {
             const compoundingType = asset.interestType === 'compound' ? 'compound' : 'simple'
             backendAsset.compounding = compoundingType
-            console.log('Mapped compounding:', compoundingType)
           }
         }
 
@@ -928,7 +914,7 @@ function Assets() {
           if (asset.value) backendAsset.acquisitionCost = asset.value
         }
 
-        console.log('Mapping asset for backend update:', { frontend: asset, backend: backendAsset })
+
         return backendAsset
       }
 
@@ -974,11 +960,30 @@ function Assets() {
     }
   }
 
-  const updateDisplayCurrency = async (currency: string, assetsToConvert = assets) => {
+  const updateDisplayCurrency = async (currency: string, assetsToConvert = assets) => {    
+    // Always work with the original assets from the backend, not converted assets
+    const originalAssets = assetsToConvert.map(asset => {
+      // If this is a converted asset, use the original values
+      const assetAny = asset as any
+      if (assetAny.originalValue !== undefined) {
+        return {
+          ...asset,
+          value: assetAny.originalValue,
+          gain: assetAny.originalGain,
+          principal: assetAny.originalPrincipal,
+          accruedInterest: assetAny.originalAccruedInterest,
+          amountPerPeriod: assetAny.originalAmountPerPeriod,
+          monthlyEquivalent: assetAny.originalMonthlyEquivalent
+        }
+      }
+      return asset
+    })
+    
     setIsConverting(true)
     try {
+      
       // First, fetch live prices for all stock assets
-      const stockAssets = assetsToConvert.filter(asset => asset.type === 'stock')
+      const stockAssets = originalAssets.filter(asset => asset.type === 'stock')
       const livePrices: { [symbol: string]: number } = {}
       
       // Fetch live prices for all stocks in parallel
@@ -1013,7 +1018,7 @@ function Assets() {
       }
 
       // Update asset values with current calculations before conversion
-      const updatedAssets = assetsToConvert.map(asset => {
+      const updatedAssets = originalAssets.map(asset => {
         // Process stocks - calculate current value and gains using live prices when available
         if (asset.type === 'stock' && asset.quantity) {
           const quantity = parseFloat(asset.quantity?.toString() || '0')
@@ -1029,18 +1034,7 @@ function Assets() {
             const gain = currentValue - purchaseCost
             const gainPercent = purchaseCost > 0 ? (gain / purchaseCost) * 100 : 0
             
-            console.log('Processing stock with live price:', {
-              name: asset.name,
-              symbol: symbol,
-              quantity,
-              storedPrice: asset.currentPrice,
-              livePrice: symbol ? livePrices[symbol] : undefined,
-              currentPrice,
-              purchasePrice,
-              currentValue,
-              gain,
-              gainPercent
-            })
+
             
             return {
               ...asset,
@@ -1063,15 +1057,7 @@ function Assets() {
           const compoundingFrequency = asset.compoundingFrequency || asset.interestSchedule || 'annually'
           const interestType = asset.interestType || asset.compounding || 'compound'
           
-          console.log('Processing deposit:', {
-            name: asset.name,
-            principal,
-            rate,
-            startDate,
-            maturityDate,
-            compoundingFrequency,
-            interestType
-          })
+
           
           if (principal > 0 && rate > 0) {
             const depositInfo = {
@@ -1173,11 +1159,12 @@ function Assets() {
       
       const converted = await convertAssetValues(updatedAssets, currency, convertAmount)
       setConvertedAssets(converted)
-      setDisplayCurrency(currency)
+      // Don't call setDisplayCurrency here as it's already set in the context
+      // and calling it again would trigger unnecessary re-renders
     } catch (error) {
       console.error('Failed to convert currencies:', error)
       // Fallback to original values
-      setConvertedAssets(assetsToConvert)
+      setConvertedAssets(originalAssets)
     } finally {
       setIsConverting(false)
     }
@@ -1186,7 +1173,10 @@ function Assets() {
 
 
   const refreshRates = () => {
-    updateDisplayCurrency(displayCurrency)
+    // Only refresh if we have assets to convert
+    if (assets.length > 0) {
+      updateDisplayCurrency(displayCurrency)
+    }
   }
 
   // Initialize on mount
@@ -1200,31 +1190,45 @@ function Assets() {
     if (assets.length > 0) {
       updateDisplayCurrency(displayCurrency)
     }
-  }, [assets.length, displayCurrency])
+  }, [assets.length, displayCurrency]) // Remove displayCurrency dependency to prevent infinite loops
 
-  // Convert portfolio metrics when currency changes
+  // Convert portfolio metrics when currency changes (but not on initial load)
   useEffect(() => {
-    if (portfolioMetrics && displayCurrency) {
-      convertPortfolioMetrics(portfolioMetrics, displayCurrency)
+    if (portfolioMetricsOriginal && displayCurrency && portfolioMetricsOriginal.totalValue > 0) {
+      // Only convert if we have valid metrics and it's not the initial load
+      convertPortfolioMetrics(portfolioMetricsOriginal, displayCurrency)
     }
-  }, [displayCurrency, portfolioMetrics])
+  }, [displayCurrency]) // Remove portfolioMetrics dependency to prevent infinite loops
 
   const getTotalValue = () => {
     // Use backend portfolio metrics for consistent totals with Dashboard
     if (portfolioMetrics) {
+      // If we have original USD values stored, use them for conversion
+      const portfolioMetricsAny = portfolioMetrics as any
+      if (portfolioMetricsAny.originalUSDValues && displayCurrency !== 'USD') {
+        // The totalValue should already be converted to display currency
+        return portfolioMetrics.totalValue
+      }
       return portfolioMetrics.totalValue
     }
     // Fallback to frontend calculation if portfolio metrics not available
-    return convertedAssets
+    const frontendTotal = convertedAssets
       .filter(asset => asset.type !== 'recurringIncome')
       .reduce((sum, asset) => {
         return sum + ((asset as any).convertedValue || asset.value || 0)
       }, 0)
+    return frontendTotal
   }
 
   const getTotalGain = () => {
     // Use backend portfolio metrics for consistent totals with Dashboard
     if (portfolioMetrics) {
+      // If we have original USD values stored, use them for conversion
+      const portfolioMetricsAny = portfolioMetrics as any
+      if (portfolioMetricsAny.originalUSDValues && displayCurrency !== 'USD') {
+        // The totalGainLoss should already be converted to display currency
+        return portfolioMetrics.totalGainLoss
+      }
       return portfolioMetrics.totalGainLoss
     }
     // Fallback to frontend calculation if portfolio metrics not available
@@ -1248,37 +1252,14 @@ function Assets() {
         // Calculate after-tax profit for this asset
         const grossProfit = getDisplayGain(asset) // Already converted gain
         
-        // Get original gain for tax calculation
-        const originalGain = assetAny.originalGain || assetAny.gain || grossProfit
-        
-        // Calculate tax on original gain, then convert to display currency
-        const originalTaxCalculation = calculateAfterTaxProfit(
+        // Calculate tax directly on the converted gross profit
+        // This is simpler and more accurate than trying to convert tax amounts
+        const taxCalculation = calculateAfterTaxProfit(
           asset.type,
           asset.type === 'deposit' ? 'interest' : 'capital_gains',
-          originalGain,
+          grossProfit,
           user?.preferences?.taxSettings
         )
-        
-        // If currency conversion was applied, convert tax amounts
-        let taxCalculation
-        if (assetAny.originalCurrency && assetAny.originalCurrency !== displayCurrency && originalGain !== 0) {
-          // Tax was calculated on original amount, so convert the tax and net amounts
-          const conversionRatio = grossProfit / originalGain
-          taxCalculation = {
-            grossProfit: grossProfit,
-            taxAmount: originalTaxCalculation.taxAmount * Math.abs(conversionRatio),
-            netProfit: originalTaxCalculation.netProfit * conversionRatio,
-            taxRate: originalTaxCalculation.taxRate
-          }
-        } else {
-          // No conversion needed
-          taxCalculation = {
-            grossProfit: grossProfit,
-            taxAmount: originalTaxCalculation.taxAmount,
-            netProfit: originalTaxCalculation.netProfit,
-            taxRate: originalTaxCalculation.taxRate
-          }
-        }
         
         return sum + taxCalculation.netProfit
       }, 0)
@@ -1287,20 +1268,21 @@ function Assets() {
   const getLastMonthProfitLoss = () => {
     // Use backend portfolio metrics for consistent totals with Dashboard
     if (portfolioMetrics) {
+      // If we have original USD values stored, use them for conversion
+      const portfolioMetricsAny = portfolioMetrics as any
+      if (portfolioMetricsAny.originalUSDValues && displayCurrency !== 'USD') {
+        // The monthlyChange should already be converted to display currency
+        return portfolioMetrics.monthlyChange
+      }
       return portfolioMetrics.monthlyChange
     }
     
     // Fallback to frontend calculation if portfolio metrics not available
     if (convertedAssets.length === 0) return 0
     
-    console.log('🔍 Debug: Starting monthly profit calculation')
-    console.log('📊 Total assets:', convertedAssets.length)
-    
     let totalLastMonthProfit = 0
     
     convertedAssets.forEach(asset => {
-      console.log('Processing asset:', asset.name, 'Type:', asset.type)
-      
       const assetAny = asset as any
       const currentValue = getDisplayValue(asset)
       const currentGain = getDisplayGain(asset)
@@ -1308,7 +1290,6 @@ function Assets() {
       // Calculate what the value would have been a month ago
       const dateString = asset.purchaseDate || asset.createdAt
       if (!dateString && asset.type !== 'recurringIncome') {
-        console.log('⚠️ Asset without date:', asset.name)
         return
       }
       
@@ -1321,7 +1302,6 @@ function Assets() {
         // Use the converted monthly equivalent if available, otherwise calculate from original values
         if (assetAny.monthlyEquivalent && !isNaN(assetAny.monthlyEquivalent)) {
           lastMonthProfit = assetAny.monthlyEquivalent
-          console.log(`💰 Recurring Income ${asset.name}: Using converted monthly equivalent = ${lastMonthProfit}`)
         } else {
           // Calculate from original values
           const amount = parseFloat(String(assetAny.amountPerPeriod || assetAny.monthlyAmount || 0))
@@ -1349,11 +1329,9 @@ function Assets() {
             default:
               lastMonthProfit = amount // Default to monthly
           }
-          console.log(`💰 Recurring Income ${asset.name}: Calculated monthly equivalent = ${lastMonthProfit} from amount=${amount}, frequency=${frequency}`)
         }
         
         totalLastMonthProfit += lastMonthProfit
-        console.log(`   Adding ${lastMonthProfit} to total. New total: ${totalLastMonthProfit}`)
         return // Early return for recurring income
       }
       
@@ -1377,7 +1355,6 @@ function Assets() {
         const annualRate = (asset.interestRate || 0) / 100
         const monthlyRate = annualRate / 12
         lastMonthProfit = principal * monthlyRate
-        console.log(`🏦 Deposit ${asset.name}: Monthly interest = ${lastMonthProfit}`)
       } else {
         // For other assets, calculate the profit change from last month
         if (monthsHeldNow > monthsHeldLastMonth) {
@@ -1388,14 +1365,11 @@ function Assets() {
           const annualizedGain = currentGain * (12 / monthsHeldNow)
           lastMonthProfit = annualizedGain / 12
         }
-        console.log(`📈 Asset ${asset.name}: Last month profit = ${lastMonthProfit}`)
       }
       
       totalLastMonthProfit += lastMonthProfit
-      console.log(`   Adding ${lastMonthProfit} to total. New total: ${totalLastMonthProfit}`)
     })
     
-    console.log('💰 Final total last month profit:', totalLastMonthProfit)
     return totalLastMonthProfit
   }
 

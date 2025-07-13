@@ -119,10 +119,17 @@ export class PortfolioService {
     // Calculate total portfolio value and gains (convert to USD)
     for (const asset of enhancedAssets) {
       if (asset.type !== AssetType.RECURRING_INCOME) {
-        // Convert current value to USD
-        const currentValueUSD = await this.convertAssetValueToUSD(asset.currentValue, asset.currency);
-        const totalGainLossUSD = await this.convertAssetValueToUSD(asset.totalGainLoss, asset.currency);
-        const investmentUSD = await this.convertAssetValueToUSD(this.getAssetInvestment(asset), asset.currency);
+        // Use the getter methods to get calculated values
+        const currentValue = asset.currentValue;
+        const totalGainLoss = asset.totalGainLoss;
+        const investment = this.getAssetInvestment(asset);
+        
+
+        
+        // Convert to USD
+        const currentValueUSD = await this.convertAssetValueToUSD(currentValue, asset.currency);
+        const totalGainLossUSD = await this.convertAssetValueToUSD(totalGainLoss, asset.currency);
+        const investmentUSD = await this.convertAssetValueToUSD(investment, asset.currency);
         
         metrics.totalValue += safeNumber(currentValueUSD);
         metrics.totalGainLoss += safeNumber(totalGainLossUSD);
@@ -167,17 +174,33 @@ export class PortfolioService {
     metrics.performanceMetrics.averageReturn = metrics.monthlyChange;
     metrics.performanceMetrics.annualRecurringIncome = metrics.performanceMetrics.monthlyRecurringIncome * 12;
 
-    // Debug logging
-    console.log('Portfolio Metrics Debug:', {
+
+
+    // Create a new object to ensure no reference issues
+    const result: PortfolioMetrics = {
       totalValue: metrics.totalValue,
       totalGainLoss: metrics.totalGainLoss,
-      totalInvestment: metrics.performanceMetrics.totalInvestment,
+      totalGainLossPercent: metrics.totalGainLossPercent,
       monthlyChange: metrics.monthlyChange,
+      monthlyChangePercent: metrics.monthlyChangePercent,
+      yearlyChange: metrics.yearlyChange,
+      yearlyChangePercent: metrics.yearlyChangePercent,
       assetCount: metrics.assetCount,
+      assetAllocation: metrics.assetAllocation,
+      recentTransactions: metrics.recentTransactions,
+      performanceMetrics: metrics.performanceMetrics,
+    };
+
+    // Debug logging to check the values being returned
+    console.log('🔍 Portfolio Metrics Debug:', {
+      totalValue: result.totalValue,
+      totalGainLoss: result.totalGainLoss,
+      monthlyChange: result.monthlyChange,
+      assetCount: result.assetCount,
       assetsProcessed: enhancedAssets.length,
     });
 
-    return metrics;
+    return result;
   }
 
   private async convertAssetValueToUSD(value: number, currency: string): Promise<number> {
@@ -191,7 +214,9 @@ export class PortfolioService {
     }
 
     try {
+      console.log(`🔄 Converting ${value} ${currency} to USD`);
       const convertedValue = await this.currencyService.convertCurrency(value, currency, 'USD');
+      console.log(`✅ Converted ${value} ${currency} = ${convertedValue} USD`);
       return safeNumber(convertedValue);
     } catch (error) {
       console.error(`Failed to convert ${value} ${currency} to USD:`, error);
@@ -200,92 +225,10 @@ export class PortfolioService {
   }
 
   private enhanceAssetCalculations(asset: Asset): Asset {
-    // Helper function to safely convert to number and avoid NaN
-    const safeNumber = (value: any): number => {
-      const num = Number(value);
-      return isNaN(num) ? 0 : num;
-    };
-
-    // Enhanced calculations similar to frontend logic
-    if (asset.type === AssetType.STOCK && asset.quantity && asset.currentPrice) {
-      const quantity = safeNumber(asset.quantity);
-      const currentPrice = safeNumber(asset.currentPrice);
-      const purchasePrice = safeNumber(asset.purchasePrice);
-      
-      const currentValue = currentPrice * quantity;
-      const purchaseValue = purchasePrice * quantity;
-      const gainLoss = currentValue - purchaseValue;
-      const gainLossPercent = purchaseValue > 0 ? (gainLoss / purchaseValue) * 100 : 0;
-      
-      return {
-        ...asset,
-        currentValue: safeNumber(currentValue),
-        totalGainLoss: safeNumber(gainLoss),
-        gainLossPercentage: safeNumber(gainLossPercent),
-      } as Asset;
-    }
-
-    if (asset.type === AssetType.DEPOSIT && asset.principal && asset.interestRate) {
-      const principal = safeNumber(asset.principal);
-      const currentValue = this.calculateDepositValue(asset);
-      const accruedInterest = currentValue - principal;
-      const gainLossPercent = principal > 0 ? (accruedInterest / principal) * 100 : 0;
-      
-      return {
-        ...asset,
-        currentValue: safeNumber(currentValue),
-        totalGainLoss: safeNumber(accruedInterest),
-        gainLossPercentage: safeNumber(gainLossPercent),
-      } as Asset;
-    }
-
-    if (asset.type === AssetType.PRECIOUS_METAL && asset.weight && asset.currentPrice) {
-      const weight = safeNumber(asset.weight);
-      const currentPrice = safeNumber(asset.currentPrice);
-      const acquisitionCost = safeNumber(asset.acquisitionCost);
-      
-      const currentValue = currentPrice * weight;
-      const gainLoss = currentValue - acquisitionCost;
-      const gainLossPercent = acquisitionCost > 0 ? (gainLoss / acquisitionCost) * 100 : 0;
-      
-      return {
-        ...asset,
-        currentValue: safeNumber(currentValue),
-        totalGainLoss: safeNumber(gainLoss),
-        gainLossPercentage: safeNumber(gainLossPercent),
-      } as Asset;
-    }
-
-    if (asset.type === AssetType.CASH && asset.acquisitionCost) {
-      const acquisitionCost = safeNumber(asset.acquisitionCost);
-      
-      return {
-        ...asset,
-        currentValue: acquisitionCost,
-        totalGainLoss: 0,
-        gainLossPercentage: 0,
-      } as Asset;
-    }
-
-    if (asset.type === AssetType.RECURRING_INCOME && asset.amountPerPeriod) {
-      const monthlyEquivalent = this.getMonthlyRecurringIncome(asset);
-      const annualValue = monthlyEquivalent * 12;
-      
-      return {
-        ...asset,
-        currentValue: safeNumber(annualValue),
-        totalGainLoss: safeNumber(annualValue),
-        gainLossPercentage: 100,
-      } as Asset;
-    }
-
-    // Return asset with safe default values if no type matches
-    return {
-      ...asset,
-      currentValue: safeNumber(asset.currentValue || 0),
-      totalGainLoss: safeNumber(asset.totalGainLoss || 0),
-      gainLossPercentage: safeNumber(asset.gainLossPercentage || 0),
-    } as Asset;
+    // The Asset entity already has getter methods for currentValue, totalGainLoss, and gainLossPercentage
+    // We don't need to enhance the asset object, just return it as is
+    // The getters will calculate the values dynamically when accessed
+    return asset;
   }
 
   private calculateDepositValue(asset: Asset): number {

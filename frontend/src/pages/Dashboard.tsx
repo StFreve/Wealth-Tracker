@@ -9,7 +9,7 @@ import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { CurrencyStatus } from '../components/CurrencyStatus';
 import { useBackendCurrencyRates } from '@/hooks/useBackendCurrencyRates';
 import { portfolioApi, PortfolioMetrics } from '@/lib/api/portfolioApi';
-import { AssetAllocationChart } from '@/components/charts';
+import { WealthChangeChart } from '@/components/WealthChangeChart';
 import { 
   TrendingUpIcon, 
   DollarSignIcon, 
@@ -98,6 +98,35 @@ export default function Dashboard() {
 
   const handleCreateWidget = () => {
     navigate('/settings');
+  };
+
+  // Generate wealth change data for the chart
+  const generateWealthChangeData = (metrics: PortfolioMetrics) => {
+    const months = [];
+    const currentDate = new Date();
+    
+    // Generate last 12 months of data
+    for (let i = 11; i >= 0; i--) {
+      const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
+      const monthName = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+      
+      // For now, we'll use the current portfolio value and estimate historical values
+      // In a real implementation, this would come from historical data
+      const baseValue = metrics.totalValue;
+      const monthlyChange = metrics.monthlyChange;
+      
+      // Estimate historical value (this is simplified - in reality you'd have actual historical data)
+      const estimatedValue = baseValue - (monthlyChange * i);
+      const estimatedChange = i === 0 ? monthlyChange : monthlyChange * 0.8; // Slight variation
+      
+      months.push({
+        month: monthName,
+        value: Math.max(estimatedValue, 0), // Ensure non-negative
+        change: estimatedChange
+      });
+    }
+    
+    return months;
   };
 
   // Helper function to convert metrics directly (for immediate conversion after load)
@@ -259,12 +288,13 @@ export default function Dashboard() {
     loadPortfolioMetrics(displayCurrency); // Pass the currency to load and convert immediately
   }, []);
 
-  // Convert metrics when currency changes
+  // Convert metrics when currency changes (but not on initial load)
   useEffect(() => {
-    if (originalMetrics && displayCurrency) {
+    if (originalMetrics && displayCurrency && originalMetrics.totalValue > 0) {
+      // Only convert if we have valid metrics and it's not the initial load
       convertPortfolioMetrics(displayCurrency);
     }
-  }, [displayCurrency, originalMetrics]);
+  }, [displayCurrency]); // Remove originalMetrics dependency to prevent infinite loops
 
   if (loading) {
     return (
@@ -563,11 +593,11 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Asset Allocation Chart */}
+      {/* Wealth Change Over Time Chart */}
       <Card className="p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            {t('dashboard.assetAllocation')}
+            {t('dashboard.wealthChangeOverTime')}
           </h3>
           <Button variant="outline" size="sm" onClick={handleViewAnalytics}>
             <BarChart3 className="h-4 w-4 mr-2" />
@@ -575,16 +605,16 @@ export default function Dashboard() {
           </Button>
         </div>
         
-        {portfolioMetrics?.assetAllocation && portfolioMetrics.assetAllocation.length > 0 ? (
-          <AssetAllocationChart 
-            data={portfolioMetrics.assetAllocation} 
+        {portfolioMetrics ? (
+          <WealthChangeChart 
+            data={generateWealthChangeData(portfolioMetrics)}
             currency={displayCurrency}
             height={300}
           />
         ) : (
           <div className="h-64 bg-gray-50 dark:bg-gray-800 rounded-lg flex items-center justify-center">
             <div className="text-center">
-              <PieChartIcon className="h-12 w-12 text-gray-400 mx-auto mb-2" />
+              <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-2" />
               <p className="text-gray-500 dark:text-gray-400">
                 {t('dashboard.noDataDescription')}
               </p>

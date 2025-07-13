@@ -171,7 +171,6 @@ export class StockService {
       // Try to get from cache first
       const cached = await this.cacheManager.get<StockPrice>(cacheKey);
       if (cached) {
-        this.logger.debug(`Returning cached stock price for ${symbol}`);
         return cached;
       }
     }
@@ -213,8 +212,6 @@ export class StockService {
     // Try each API source
     for (const apiSource of this.STOCK_API_SOURCES) {
       try {
-        this.logger.debug(`Trying ${apiSource.name} for ${symbol}...`);
-        
         // Skip HTTP call for mock fallback
         if (apiSource.name === 'fallback-mock') {
           const mockPrice = apiSource.parseResponse(null, symbol);

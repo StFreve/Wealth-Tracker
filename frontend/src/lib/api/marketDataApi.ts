@@ -77,6 +77,16 @@ class MarketDataApi {
     return response.json();
   }
 
+  async convertCurrencyBatch(conversions: Array<{ amount: number; from: string; to: string }>): Promise<{
+    conversions: Array<{ amount: number; from: string; to: string; convertedAmount: number; rate: number }>;
+  }> {
+    const response = await this.fetchWithAuth('/market-data/currency/convert/batch', {
+      method: 'POST',
+      body: JSON.stringify(conversions),
+    });
+    return response.json();
+  }
+
   async getSupportedCurrencies(): Promise<{ currencies: string[] }> {
     const response = await this.fetchWithAuth('/market-data/currency/supported');
     return response.json();

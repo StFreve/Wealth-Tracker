@@ -94,7 +94,8 @@
     "diversification": "Diversification",
     "errorTitle": "Failed to Load Data",
     "noData": "No Portfolio Data",
-    "noDataDescription": "Start building your portfolio by adding your first asset."
+    "noDataDescription": "Start building your portfolio by adding your first asset.",
+    "wealthChangeOverTime": "Wealth Change Over Time"
   },
   "assets": {
     "title": "Assets",

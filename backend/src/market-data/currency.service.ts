@@ -76,7 +76,6 @@ export class CurrencyService {
       // Try to get from cache first
       const cached = await this.cacheManager.get<CurrencyRateResponse>(this.CACHE_KEY);
       if (cached) {
-        this.logger.debug('Returning cached exchange rates');
         return cached;
       }
     }
@@ -96,8 +95,6 @@ export class CurrencyService {
     // Try each API source
     for (const apiSource of this.API_SOURCES) {
       try {
-        this.logger.debug(`Trying ${apiSource.name}...`);
-        
         const response = await firstValueFrom(
           this.httpService.get(apiSource.url, {
             timeout: 10000,

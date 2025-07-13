@@ -49,6 +49,40 @@ export class MarketDataService {
     return this.currencyService.convertCurrency(amount, from, to);
   }
 
+  async convertCurrencyBatch(conversions: Array<{ amount: number; from: string; to: string }>): Promise<Array<{ amount: number; from: string; to: string; convertedAmount: number; rate: number }>> {
+    const results = [];
+    
+    for (const conversion of conversions) {
+      try {
+        const convertedAmount = await this.currencyService.convertCurrency(
+          conversion.amount, 
+          conversion.from.toUpperCase(), 
+          conversion.to.toUpperCase()
+        );
+        
+        results.push({
+          amount: conversion.amount,
+          from: conversion.from.toUpperCase(),
+          to: conversion.to.toUpperCase(),
+          convertedAmount,
+          rate: convertedAmount / conversion.amount,
+        });
+      } catch (error) {
+        this.logger.error(`Failed to convert ${conversion.amount} ${conversion.from} to ${conversion.to}:`, error);
+        // Return original amount as fallback
+        results.push({
+          amount: conversion.amount,
+          from: conversion.from.toUpperCase(),
+          to: conversion.to.toUpperCase(),
+          convertedAmount: conversion.amount,
+          rate: 1,
+        });
+      }
+    }
+    
+    return results;
+  }
+
   async getSupportedCurrencies(): Promise<string[]> {
     return this.currencyService.getSupportedCurrencies();
   }
