@@ -39,7 +39,9 @@
     "allTime": "All Time",
     "viewAll": "View All",
     "optional": "Optional",
-    "tryAgain": "Try Again"
+    "tryAgain": "Try Again",
+    "show": "Show",
+    "hide": "Hide"
   },
   "auth": {
     "signIn": "Sign In",
@@ -95,7 +97,9 @@
     "errorTitle": "Failed to Load Data",
     "noData": "No Portfolio Data",
     "noDataDescription": "Start building your portfolio by adding your first asset.",
-    "wealthChangeOverTime": "Wealth Change Over Time"
+    "wealthChangeOverTime": "Wealth Change Over Time",
+    "historicalAndForecastData": "Historical data (solid line) and 12-month forecast (dashed line)",
+    "estimatedYearlyChange": "Estimated Yearly Change"
   },
   "assets": {
     "title": "Assets",
@@ -131,7 +135,10 @@
     "crypto": "Cryptocurrency",
     "realEstate": "Real Estate",
     "bonds": "Bonds",
-    "other": "Other"
+    "other": "Other",
+    "deposit": "Deposit",
+    "stock": "Stock",
+    "preciousMetal": "Precious Metal"
   },
   "assetTypes": {
     "stock": {
@@ -167,6 +174,16 @@
         "monthly": "Monthly",
         "quarterly": "Quarterly",
         "annually": "Annually"
+      },
+      "replenishment": {
+        "enable": "Enable Recurring Replenishment",
+        "amount": "Replenishment Amount",
+        "frequency": "Replenishment Frequency",
+        "startDate": "Replenishment Start Date",
+        "endDate": "Replenishment End Date",
+        "total": "Total Replenishments",
+        "totalPrincipal": "Total Principal + Replenishments",
+        "help": "Regular deposits added to your account at specified intervals"
       }
     },
     "preciousMetal": {

@@ -10,6 +10,11 @@ export interface DepositInfo {
   progressiveRates?: { months: number; rate: number }[] // For progressive interest
   variableRates?: { date: string; rate: number }[] // For variable interest
   tieredRates?: { minBalance: number; maxBalance?: number; rate: number }[] // For tiered interest
+  // Recurring replenishment fields
+  replenishmentAmount?: number // Amount added each period
+  replenishmentFrequency?: 'monthly' | 'quarterly' | 'annually' // How often replenishments occur
+  replenishmentStartDate?: string // When replenishments started (optional, defaults to startDate)
+  replenishmentEndDate?: string // When replenishments stop (optional)
 }
 
 export interface DepositValue {
@@ -20,12 +25,19 @@ export interface DepositValue {
   yearsElapsed: number
   isMatured: boolean
   projectedMaturityValue?: number
+  totalReplenishments?: number // Total amount of replenishments made
+  totalPrincipal?: number // Original principal + replenishments
 }
 
 /**
  * Calculate the current value of a deposit based on time elapsed and interest type
  */
 export function calculateDepositValue(deposit: DepositInfo, asOfDate: Date = new Date()): DepositValue {
+  // Check if deposit has recurring replenishments
+  if (deposit.replenishmentAmount && deposit.replenishmentAmount > 0 && deposit.replenishmentFrequency) {
+    return calculateDepositValueWithReplenishments(deposit, asOfDate)
+  }
+  
   const startDate = new Date(deposit.startDate)
   const maturityDate = deposit.maturityDate ? new Date(deposit.maturityDate) : null
   
@@ -99,7 +111,126 @@ export function calculateDepositValue(deposit: DepositInfo, asOfDate: Date = new
     monthsElapsed,
     yearsElapsed: Math.round(yearsElapsed * 100) / 100,
     isMatured,
-    projectedMaturityValue: projectedMaturityValue ? Math.round(projectedMaturityValue * 100) / 100 : undefined
+    projectedMaturityValue: projectedMaturityValue ? Math.round(projectedMaturityValue * 100) / 100 : undefined,
+    totalReplenishments: 0,
+    totalPrincipal: deposit.principal
+  }
+}
+
+/**
+ * Calculate deposit value with recurring replenishments
+ */
+export function calculateDepositValueWithReplenishments(deposit: DepositInfo, asOfDate: Date = new Date()): DepositValue {
+  const startDate = new Date(deposit.startDate)
+  const maturityDate = deposit.maturityDate ? new Date(deposit.maturityDate) : null
+  const replenishmentStartDate = deposit.replenishmentStartDate ? new Date(deposit.replenishmentStartDate) : startDate
+  const replenishmentEndDate = deposit.replenishmentEndDate ? new Date(deposit.replenishmentEndDate) : maturityDate
+  
+  // Calculate time elapsed
+  const timeDiff = asOfDate.getTime() - startDate.getTime()
+  const daysElapsed = Math.max(0, Math.floor(timeDiff / (1000 * 60 * 60 * 24)))
+  const monthsElapsed = Math.max(0, Math.floor(daysElapsed / 30.44))
+  const yearsElapsed = Math.max(0, daysElapsed / 365.25)
+  
+  // Check if deposit has matured
+  const isMatured = maturityDate ? asOfDate >= maturityDate : false
+  const effectiveDate = isMatured && maturityDate ? maturityDate : asOfDate
+  
+  // Calculate replenishment frequency in days
+  const replenishmentFrequencyDays = {
+    'monthly': 30.44,
+    'quarterly': 91.31,
+    'annually': 365.25
+  }[deposit.replenishmentFrequency!] || 30.44
+  
+  // Calculate how many replenishments have occurred
+  const replenishmentTimeDiff = Math.max(0, effectiveDate.getTime() - replenishmentStartDate.getTime())
+  const maxReplenishments = Math.floor(replenishmentTimeDiff / (replenishmentFrequencyDays * 24 * 60 * 60 * 1000))
+  
+  // Limit replenishments by end date if specified
+  let totalReplenishments = 0
+  let currentValue = 0
+  
+  // Calculate compound interest rate per compounding period
+  const annualRate = deposit.rate / 100
+  const compoundingFrequency = deposit.compoundingFrequency || 'annually'
+  const compoundingPeriodsPerYear = {
+    'daily': 365,
+    'monthly': 12,
+    'quarterly': 4,
+    'annually': 1
+  }[compoundingFrequency]
+  
+  const ratePerPeriod = annualRate / compoundingPeriodsPerYear
+  const compoundingPeriodDays = 365.25 / compoundingPeriodsPerYear
+  
+  // Start with initial principal and calculate its growth
+  const principalGrowthPeriods = Math.floor((effectiveDate.getTime() - startDate.getTime()) / (compoundingPeriodDays * 24 * 60 * 60 * 1000))
+  currentValue = deposit.principal * Math.pow(1 + ratePerPeriod, principalGrowthPeriods)
+  
+  // Add value from each replenishment
+  for (let i = 0; i < maxReplenishments; i++) {
+    const replenishmentDate = new Date(replenishmentStartDate.getTime() + i * replenishmentFrequencyDays * 24 * 60 * 60 * 1000)
+    
+    // Check if this replenishment is within the active period
+    if (replenishmentEndDate && replenishmentDate > replenishmentEndDate) break
+    if (replenishmentDate > effectiveDate) break
+    
+    // Calculate how long this replenishment has been growing
+    const replenishmentGrowthPeriods = Math.floor((effectiveDate.getTime() - replenishmentDate.getTime()) / (compoundingPeriodDays * 24 * 60 * 60 * 1000))
+    const replenishmentValue = deposit.replenishmentAmount! * Math.pow(1 + ratePerPeriod, replenishmentGrowthPeriods)
+    
+    currentValue += replenishmentValue
+    totalReplenishments += deposit.replenishmentAmount!
+  }
+  
+  const totalPrincipal = deposit.principal + totalReplenishments
+  const accruedInterest = currentValue - totalPrincipal
+  
+  // Calculate projected maturity value if applicable
+  let projectedMaturityValue: number | undefined
+  if (maturityDate && !isMatured) {
+    const maturityTimeDiff = maturityDate.getTime() - startDate.getTime()
+    const maturityDaysElapsed = Math.max(0, Math.floor(maturityTimeDiff / (1000 * 60 * 60 * 24)))
+    
+    // Calculate projected replenishments until maturity
+    const maturityReplenishmentTimeDiff = Math.max(0, maturityDate.getTime() - replenishmentStartDate.getTime())
+    const maxMaturityReplenishments = Math.floor(maturityReplenishmentTimeDiff / (replenishmentFrequencyDays * 24 * 60 * 60 * 1000))
+    
+    let projectedValue = 0
+    let projectedTotalReplenishments = 0
+    
+    // Principal growth to maturity
+    const principalMaturityPeriods = Math.floor(maturityTimeDiff / (compoundingPeriodDays * 24 * 60 * 60 * 1000))
+    projectedValue = deposit.principal * Math.pow(1 + ratePerPeriod, principalMaturityPeriods)
+    
+    // Add projected replenishments
+    for (let i = 0; i < maxMaturityReplenishments; i++) {
+      const replenishmentDate = new Date(replenishmentStartDate.getTime() + i * replenishmentFrequencyDays * 24 * 60 * 60 * 1000)
+      
+      if (replenishmentEndDate && replenishmentDate > replenishmentEndDate) break
+      if (replenishmentDate > maturityDate) break
+      
+      const replenishmentMaturityPeriods = Math.floor((maturityDate.getTime() - replenishmentDate.getTime()) / (compoundingPeriodDays * 24 * 60 * 60 * 1000))
+      const replenishmentValue = deposit.replenishmentAmount! * Math.pow(1 + ratePerPeriod, replenishmentMaturityPeriods)
+      
+      projectedValue += replenishmentValue
+      projectedTotalReplenishments += deposit.replenishmentAmount!
+    }
+    
+    projectedMaturityValue = projectedValue
+  }
+  
+  return {
+    currentValue: Math.round(currentValue * 100) / 100,
+    accruedInterest: Math.round(accruedInterest * 100) / 100,
+    daysElapsed,
+    monthsElapsed,
+    yearsElapsed: Math.round(yearsElapsed * 100) / 100,
+    isMatured,
+    projectedMaturityValue: projectedMaturityValue ? Math.round(projectedMaturityValue * 100) / 100 : undefined,
+    totalReplenishments: Math.round(totalReplenishments * 100) / 100,
+    totalPrincipal: Math.round(totalPrincipal * 100) / 100
   }
 }
 

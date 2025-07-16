@@ -9,6 +9,9 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
+import { usePortfolioMetrics } from '../contexts/PortfolioMetricsContext';
+import { useCurrency } from '../contexts/CurrencyContext';
+import { LoadingSpinner } from './ui/LoadingSpinner';
 
 const navigation = [
   {
@@ -22,11 +25,6 @@ const navigation = [
     icon: Wallet,
   },
   {
-    name: 'analytics',
-    href: '/analytics',
-    icon: BarChart3,
-  },
-  {
     name: 'settings',
     href: '/settings',
     icon: Settings,
@@ -35,6 +33,14 @@ const navigation = [
 
 export function Sidebar() {
   const { t } = useTranslation()
+  const { portfolioMetrics, loading } = usePortfolioMetrics();
+  const { displayCurrency } = useCurrency();
+  const formatCurrencyWithSymbol = (amount: number, currency: string = 'USD') => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency
+    }).format(amount);
+  };
 
   return (
     <div className="w-64 bg-card border-r border-border">
@@ -83,7 +89,13 @@ export function Sidebar() {
                 {t('dashboard.totalNetWorth')}
               </p>
               <p className="text-xs text-muted-foreground">
-                {t('common.loading')}
+                {loading ? (
+                  <span className="inline-block align-middle"><LoadingSpinner size="sm" /></span>
+                ) : portfolioMetrics ? (
+                  formatCurrencyWithSymbol(portfolioMetrics.totalValue, displayCurrency)
+                ) : (
+                  '--'
+                )}
               </p>
             </div>
           </div>

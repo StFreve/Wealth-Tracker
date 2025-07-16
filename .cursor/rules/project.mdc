@@ -1,0 +1,6 @@
+---
+alwaysApply: true
+---
+- All calculation should be done only on backend. Frontend should only show the results
+- After changes in frontend always check it for cyclic re-render
+- Don't add too much logging to frontend

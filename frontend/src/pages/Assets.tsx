@@ -58,6 +58,11 @@ const convertAssetValues = async (assets: any[], targetCurrency: string = 'USD',
       let convertedAmountPerPeriod = parseFloat(String(asset.amountPerPeriod || asset.originalAmountPerPeriod || 0))
       let convertedMonthlyEquivalent = parseFloat(String(asset.monthlyEquivalent || asset.originalMonthlyEquivalent || 0))
       
+      // Handle replenishment specific fields
+      let convertedReplenishmentAmount = parseFloat(String(asset.replenishmentAmount || asset.originalReplenishmentAmount || 0))
+      let convertedTotalReplenishments = parseFloat(String(asset.totalReplenishments || asset.originalTotalReplenishments || 0))
+      let convertedTotalPrincipal = parseFloat(String(asset.totalPrincipal || asset.originalTotalPrincipal || 0))
+      
       if (assetCurrency !== targetCurrency) {
         // Only convert non-zero amounts to avoid API errors
         if (assetValue > 0) {
@@ -87,6 +92,26 @@ const convertAssetValues = async (assets: any[], targetCurrency: string = 'USD',
             convertedMonthlyEquivalent = await convertAmount(originalMonthlyEquivalent, assetCurrency, targetCurrency)
           }
         }
+        
+        // Convert replenishment specific fields
+        if (asset.replenishmentAmount && asset.replenishmentAmount > 0) {
+          const originalReplenishmentAmount = parseFloat(String(asset.originalReplenishmentAmount || asset.replenishmentAmount || 0))
+          if (originalReplenishmentAmount > 0) {
+            convertedReplenishmentAmount = await convertAmount(originalReplenishmentAmount, assetCurrency, targetCurrency)
+          }
+        }
+        if (asset.totalReplenishments && asset.totalReplenishments > 0) {
+          const originalTotalReplenishments = parseFloat(String(asset.originalTotalReplenishments || asset.totalReplenishments || 0))
+          if (originalTotalReplenishments > 0) {
+            convertedTotalReplenishments = await convertAmount(originalTotalReplenishments, assetCurrency, targetCurrency)
+          }
+        }
+        if (asset.totalPrincipal && asset.totalPrincipal > 0) {
+          const originalTotalPrincipal = parseFloat(String(asset.originalTotalPrincipal || asset.totalPrincipal || 0))
+          if (originalTotalPrincipal > 0) {
+            convertedTotalPrincipal = await convertAmount(originalTotalPrincipal, assetCurrency, targetCurrency)
+          }
+        }
       }
       
       results.push({
@@ -97,11 +122,17 @@ const convertAssetValues = async (assets: any[], targetCurrency: string = 'USD',
         gain: convertedGain,
         amountPerPeriod: convertedAmountPerPeriod,
         monthlyEquivalent: convertedMonthlyEquivalent,
+        replenishmentAmount: convertedReplenishmentAmount,
+        totalReplenishments: convertedTotalReplenishments,
+        totalPrincipal: convertedTotalPrincipal,
         originalValue: assetValue,
         originalPrincipal: asset.principal || 0,
         originalGain: asset.gain || 0,
         originalAmountPerPeriod: parseFloat(String(asset.originalAmountPerPeriod || asset.amountPerPeriod || 0)),
         originalMonthlyEquivalent: parseFloat(String(asset.originalMonthlyEquivalent || asset.monthlyEquivalent || 0)),
+        originalReplenishmentAmount: parseFloat(String(asset.originalReplenishmentAmount || asset.replenishmentAmount || 0)),
+        originalTotalReplenishments: parseFloat(String(asset.originalTotalReplenishments || asset.totalReplenishments || 0)),
+        originalTotalPrincipal: parseFloat(String(asset.originalTotalPrincipal || asset.totalPrincipal || 0)),
         originalCurrency: assetCurrency,
         targetCurrency
       })
@@ -113,11 +144,17 @@ const convertAssetValues = async (assets: any[], targetCurrency: string = 'USD',
         convertedValue: fallbackValue,
         amountPerPeriod: parseFloat(String(asset.amountPerPeriod || 0)),
         monthlyEquivalent: parseFloat(String(asset.monthlyEquivalent || 0)),
+        replenishmentAmount: parseFloat(String(asset.replenishmentAmount || 0)),
+        totalReplenishments: parseFloat(String(asset.totalReplenishments || 0)),
+        totalPrincipal: parseFloat(String(asset.totalPrincipal || 0)),
         originalValue: fallbackValue,
         originalPrincipal: asset.principal || 0,
         originalGain: asset.gain || 0,
         originalAmountPerPeriod: parseFloat(String(asset.amountPerPeriod || 0)),
         originalMonthlyEquivalent: parseFloat(String(asset.monthlyEquivalent || 0)),
+        originalReplenishmentAmount: parseFloat(String(asset.replenishmentAmount || 0)),
+        originalTotalReplenishments: parseFloat(String(asset.totalReplenishments || 0)),
+        originalTotalPrincipal: parseFloat(String(asset.totalPrincipal || 0)),
         originalCurrency: asset.currency || 'USD',
         targetCurrency
       })
@@ -398,6 +435,60 @@ function AssetCard({
                   </span>
                 </CurrencyTooltip>
               </div>
+              {/* Replenishment Information */}
+              {parseFloat(String(assetAny.replenishmentAmount || 0)) > 0 && (
+                <>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">
+                      {t('assetTypes.deposit.replenishment.amount')}
+                    </span>
+                    <CurrencyTooltip
+                      originalAmount={assetAny.originalReplenishmentAmount || assetAny.replenishmentAmount}
+                      originalCurrency={assetAny.originalCurrency || asset.currency || displayCurrency}
+                      convertedAmount={assetAny.replenishmentAmount}
+                      convertedCurrency={displayCurrency}
+                    >
+                      <span className="text-sm text-foreground font-medium">
+                        {formatCurrencyWithSymbol(assetAny.replenishmentAmount, displayCurrency)} / {t(`assetTypes.deposit.scheduleOptions.${assetAny.replenishmentFrequency || 'monthly'}`)}
+                      </span>
+                    </CurrencyTooltip>
+                  </div>
+                  {parseFloat(String(assetAny.totalReplenishments || 0)) > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">
+                        {t('assetTypes.deposit.replenishment.total')}
+                      </span>
+                      <CurrencyTooltip
+                        originalAmount={assetAny.originalTotalReplenishments || assetAny.totalReplenishments}
+                        originalCurrency={assetAny.originalCurrency || asset.currency || displayCurrency}
+                        convertedAmount={assetAny.totalReplenishments}
+                        convertedCurrency={displayCurrency}
+                      >
+                        <span className="text-sm text-blue-600 font-medium">
+                          +{formatCurrencyWithSymbol(assetAny.totalReplenishments, displayCurrency)}
+                        </span>
+                      </CurrencyTooltip>
+                    </div>
+                  )}
+                  {parseFloat(String(assetAny.totalPrincipal || 0)) > parseFloat(String(asset.principal || 0)) && (
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">
+                        {t('assetTypes.deposit.replenishment.totalPrincipal')}
+                      </span>
+                      <CurrencyTooltip
+                        originalAmount={assetAny.originalTotalPrincipal || assetAny.totalPrincipal}
+                        originalCurrency={assetAny.originalCurrency || asset.currency || displayCurrency}
+                        convertedAmount={assetAny.totalPrincipal}
+                        convertedCurrency={displayCurrency}
+                      >
+                        <span className="text-sm text-foreground font-medium">
+                          {formatCurrencyWithSymbol(assetAny.totalPrincipal, displayCurrency)}
+                        </span>
+                      </CurrencyTooltip>
+                    </div>
+                  )}
+                </>
+              )}
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground flex items-center gap-1">
                   <Calendar className="h-3 w-3" />
@@ -444,7 +535,7 @@ function AssetCard({
                     Payment Frequency
                   </span>
                   <span className="text-sm text-foreground font-medium">
-                    {t(`addAssetModal.${asset.frequency || 'monthly'}`)}
+                    {t(`assetTypes.deposit.scheduleOptions.${asset.frequency || 'monthly'}`)}
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -788,22 +879,31 @@ function Assets() {
         currency: newAsset.currency
       }
 
-      // Add type-specific fields
-      if (newAsset.type === 'stock') {
-        if (newAsset.ticker) backendAsset.symbol = newAsset.ticker
-        if (newAsset.quantity) backendAsset.quantity = newAsset.quantity
-        if (newAsset.purchasePrice) backendAsset.purchasePrice = newAsset.purchasePrice
-        if (newAsset.currentPrice) backendAsset.currentPrice = newAsset.currentPrice
-      }
+          // Add type-specific fields
+    if (newAsset.type === 'stock') {
+      if (newAsset.ticker) backendAsset.symbol = newAsset.ticker
+      if (newAsset.quantity) backendAsset.quantity = newAsset.quantity
+      if (newAsset.purchasePrice) backendAsset.purchasePrice = newAsset.purchasePrice
+      if (newAsset.currentPrice) backendAsset.currentPrice = newAsset.currentPrice
+    }
 
-      if (newAsset.type === 'deposit') {
-        if (newAsset.principal) backendAsset.principal = newAsset.principal
-        if (newAsset.rate) backendAsset.interestRate = newAsset.rate
-        if (newAsset.startDate) backendAsset.startDate = newAsset.startDate
-        if (newAsset.maturityDate) backendAsset.endDate = newAsset.maturityDate
-        if (newAsset.compoundingFrequency) backendAsset.interestSchedule = newAsset.compoundingFrequency.toLowerCase()
-        if (newAsset.interestType) backendAsset.compounding = newAsset.interestType === 'compound' ? 'compound' : 'simple'
-      }
+    if (newAsset.type === 'deposit') {
+      if (newAsset.principal) backendAsset.principal = newAsset.principal
+      if (newAsset.rate) backendAsset.interestRate = newAsset.rate
+      if (newAsset.startDate) backendAsset.startDate = newAsset.startDate
+      if (newAsset.maturityDate) backendAsset.endDate = newAsset.maturityDate
+      if (newAsset.compoundingFrequency) backendAsset.interestSchedule = newAsset.compoundingFrequency.toLowerCase()
+      if (newAsset.interestType) backendAsset.compounding = newAsset.interestType === 'compound' ? 'compound' : 'simple'
+      
+      // Add replenishment fields if present
+      if (newAsset.replenishmentAmount) backendAsset.replenishmentAmount = newAsset.replenishmentAmount
+      if (newAsset.replenishmentFrequency) backendAsset.replenishmentFrequency = newAsset.replenishmentFrequency.toLowerCase()
+      if (newAsset.replenishmentStartDate) backendAsset.replenishmentStartDate = newAsset.replenishmentStartDate
+      if (newAsset.replenishmentEndDate) backendAsset.replenishmentEndDate = newAsset.replenishmentEndDate
+      
+      // Add calculated values
+      if (newAsset.accruedInterest !== undefined) backendAsset.accruedInterest = newAsset.accruedInterest
+    }
 
       if (newAsset.type === 'preciousMetal') {
         if (newAsset.weight) backendAsset.weight = newAsset.weight
@@ -896,6 +996,16 @@ function Assets() {
             const compoundingType = asset.interestType === 'compound' ? 'compound' : 'simple'
             backendAsset.compounding = compoundingType
           }
+          
+          // Add replenishment fields if present
+          const assetAny = asset as any
+          if (assetAny.replenishmentAmount) backendAsset.replenishmentAmount = assetAny.replenishmentAmount
+          if (assetAny.replenishmentFrequency) backendAsset.replenishmentFrequency = assetAny.replenishmentFrequency.toLowerCase()
+          if (assetAny.replenishmentStartDate) backendAsset.replenishmentStartDate = assetAny.replenishmentStartDate
+          if (assetAny.replenishmentEndDate) backendAsset.replenishmentEndDate = assetAny.replenishmentEndDate
+          
+          // Add calculated values
+          if (assetAny.accruedInterest !== undefined) backendAsset.accruedInterest = assetAny.accruedInterest
         }
 
         if (asset.type === 'preciousMetal') {
@@ -1069,7 +1179,14 @@ function Assets() {
               interestType: (interestType as 'simple' | 'compound' | 'progressive' | 'variable' | 'tiered'),
               progressiveRates: (asset as any).progressiveRates,
               variableRates: (asset as any).variableRates,
-              tieredRates: (asset as any).tieredRates
+              tieredRates: (asset as any).tieredRates,
+              // Include replenishment data if present
+              ...((asset as any).replenishmentAmount && {
+                replenishmentAmount: parseFloat(String((asset as any).replenishmentAmount || 0)),
+                replenishmentFrequency: (asset as any).replenishmentFrequency as 'monthly' | 'quarterly' | 'annually',
+                replenishmentStartDate: (asset as any).replenishmentStartDate,
+                replenishmentEndDate: (asset as any).replenishmentEndDate
+              })
             }
             const depositValue = calculateDepositValue(depositInfo)
             
@@ -1088,7 +1205,10 @@ function Assets() {
               isMatured: depositValue.isMatured,
               projectedMaturityValue: depositValue.projectedMaturityValue,
               gain: depositValue.accruedInterest,
-              gainPercent: principal > 0 ? (depositValue.accruedInterest / principal) * 100 : 0
+              gainPercent: principal > 0 ? (depositValue.accruedInterest / principal) * 100 : 0,
+              // Add replenishment values if present
+              totalReplenishments: depositValue.totalReplenishments || 0,
+              totalPrincipal: depositValue.totalPrincipal || principal
             }
           }
         }

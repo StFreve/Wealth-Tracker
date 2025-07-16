@@ -1,0 +1,6 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+When running commands use only functionality available in PowerShell 7.5.2

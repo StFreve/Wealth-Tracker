@@ -74,7 +74,13 @@ export function EditAssetModal({ isOpen, onClose, onUpdate, asset }: EditAssetMo
     purity: '',
     monthlyAmount: '',
     frequency: 'monthly',
-    amount: ''
+    amount: '',
+    // Replenishment fields
+    enableReplenishment: 'false',
+    replenishmentAmount: '',
+    replenishmentFrequency: 'monthly',
+    replenishmentStartDate: '',
+    replenishmentEndDate: ''
   })
   
   // Stock price fetching for dynamic pricing
@@ -114,7 +120,13 @@ export function EditAssetModal({ isOpen, onClose, onUpdate, asset }: EditAssetMo
         purity: formatNumberForInput(asset.purity || 0),
         monthlyAmount: formatNumberForInput(asset.monthlyAmount || asset.amountPerPeriod || 0),
         frequency: asset.frequency || 'monthly',
-        amount: formatNumberForInput(asset.value || 0)
+        amount: formatNumberForInput(asset.value || 0),
+        // Replenishment fields
+        enableReplenishment: Boolean((asset as any).replenishmentAmount).toString(),
+        replenishmentAmount: formatNumberForInput((asset as any).replenishmentAmount || 0),
+        replenishmentFrequency: (asset as any).replenishmentFrequency || 'monthly',
+        replenishmentStartDate: formatDateForInput((asset as any).replenishmentStartDate || ''),
+        replenishmentEndDate: formatDateForInput((asset as any).replenishmentEndDate || '')
       })
     }
   }, [asset, isOpen])
@@ -224,7 +236,14 @@ export function EditAssetModal({ isOpen, onClose, onUpdate, asset }: EditAssetMo
           interestType: formData.interestType as 'simple' | 'compound' | 'progressive' | 'variable' | 'tiered',
           progressiveRates,
           variableRates,
-          tieredRates
+          tieredRates,
+          // Include replenishment data if enabled
+          ...(formData.enableReplenishment === 'true' && {
+            replenishmentAmount: parseFormattedNumber(formData.replenishmentAmount),
+            replenishmentFrequency: formData.replenishmentFrequency as 'monthly' | 'quarterly' | 'annually',
+            replenishmentStartDate: formData.replenishmentStartDate || undefined,
+            replenishmentEndDate: formData.replenishmentEndDate || undefined
+          })
         }
         const depositValue = calculateDepositValue(depositInfo)
         
@@ -254,7 +273,16 @@ export function EditAssetModal({ isOpen, onClose, onUpdate, asset }: EditAssetMo
           daysElapsed: depositValue.daysElapsed,
           status: getDepositStatus(depositValue),
           isMatured: depositValue.isMatured,
-          projectedMaturityValue: depositValue.projectedMaturityValue
+          projectedMaturityValue: depositValue.projectedMaturityValue,
+          // Include replenishment data if enabled
+          ...(formData.enableReplenishment === 'true' && {
+            replenishmentAmount: parseFormattedNumber(formData.replenishmentAmount),
+            replenishmentFrequency: formData.replenishmentFrequency,
+            replenishmentStartDate: formData.replenishmentStartDate || undefined,
+            replenishmentEndDate: formData.replenishmentEndDate || undefined,
+            totalReplenishments: depositValue.totalReplenishments,
+            totalPrincipal: depositValue.totalPrincipal
+          })
         }
         break
       case 'preciousMetal':
@@ -541,6 +569,85 @@ export function EditAssetModal({ isOpen, onClose, onUpdate, asset }: EditAssetMo
                     value={formData.maturityDate}
                     onChange={(e) => handleInputChange('maturityDate', e.target.value)}
                   />
+                </div>
+
+                {/* Recurring Replenishment Section */}
+                <div className="border border-border rounded-lg p-4 bg-muted/50">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <input
+                      type="checkbox"
+                      id="enableReplenishment"
+                      checked={formData.enableReplenishment === 'true'}
+                      onChange={(e) => handleInputChange('enableReplenishment', e.target.checked.toString())}
+                      className="rounded border-input"
+                    />
+                    <label htmlFor="enableReplenishment" className="text-sm font-medium text-foreground">
+                      {t('assetTypes.deposit.replenishment.enable')}
+                    </label>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    {t('assetTypes.deposit.replenishment.help')}
+                  </p>
+
+                  {formData.enableReplenishment === 'true' && (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-foreground mb-1">
+                            {t('assetTypes.deposit.replenishment.amount')} ({currency})
+                          </label>
+                          <Input
+                            value={formData.replenishmentAmount}
+                            onChange={(e) => handleNumberInput('replenishmentAmount', e.target.value)}
+                            placeholder="0.00"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-foreground mb-1">
+                            {t('assetTypes.deposit.replenishment.frequency')}
+                          </label>
+                          <select
+                            value={formData.replenishmentFrequency}
+                            onChange={(e) => handleInputChange('replenishmentFrequency', e.target.value)}
+                            className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                          >
+                            <option value="monthly">{t('assetTypes.deposit.scheduleOptions.monthly')}</option>
+                            <option value="quarterly">{t('assetTypes.deposit.scheduleOptions.quarterly')}</option>
+                            <option value="annually">{t('assetTypes.deposit.scheduleOptions.annually')}</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-foreground mb-1">
+                            {t('assetTypes.deposit.replenishment.startDate')}
+                          </label>
+                          <Input
+                            type="date"
+                            value={formData.replenishmentStartDate}
+                            onChange={(e) => handleInputChange('replenishmentStartDate', e.target.value)}
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Leave empty to start with deposit start date
+                          </p>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-foreground mb-1">
+                            {t('assetTypes.deposit.replenishment.endDate')}
+                          </label>
+                          <Input
+                            type="date"
+                            value={formData.replenishmentEndDate}
+                            onChange={(e) => handleInputChange('replenishmentEndDate', e.target.value)}
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Leave empty to continue until maturity
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </>
             )}

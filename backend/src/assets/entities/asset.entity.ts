@@ -96,6 +96,9 @@ export class Asset {
   @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true })
   taxRate: number;
 
+  @Column({ type: 'decimal', precision: 15, scale: 2, nullable: true })
+  accruedInterest: number;
+
   @Column({ nullable: true })
   startDate: Date;
 
@@ -115,6 +118,23 @@ export class Asset {
     nullable: true
   })
   interestSchedule: InterestSchedule;
+
+  // Deposit replenishment fields
+  @Column({ type: 'decimal', precision: 15, scale: 2, nullable: true })
+  replenishmentAmount: number;
+
+  @Column({
+    type: 'enum',
+    enum: InterestSchedule,
+    nullable: true
+  })
+  replenishmentFrequency: InterestSchedule;
+
+  @Column({ nullable: true })
+  replenishmentStartDate: Date;
+
+  @Column({ nullable: true })
+  replenishmentEndDate: Date;
 
   // Precious metal-specific fields
   @Column({ nullable: true })

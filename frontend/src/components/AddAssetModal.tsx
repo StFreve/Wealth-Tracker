@@ -73,7 +73,13 @@ export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetM
     purity: '',
     monthlyAmount: '',
     frequency: 'monthly',
-    amount: ''
+    amount: '',
+    // Replenishment fields
+    enableReplenishment: 'false',
+    replenishmentAmount: '',
+    replenishmentFrequency: 'monthly',
+    replenishmentStartDate: '',
+    replenishmentEndDate: ''
   })
   
   // Initialize form with copied asset data when provided
@@ -108,7 +114,13 @@ export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetM
         purity: formatNumberForInput(initialData.purity || 0),
         monthlyAmount: formatNumberForInput(initialData.monthlyAmount || initialData.amountPerPeriod || 0),
         frequency: initialData.frequency || 'monthly',
-        amount: formatNumberForInput(initialData.value || 0)
+        amount: formatNumberForInput(initialData.value || 0),
+        // Replenishment fields
+        enableReplenishment: Boolean(initialData.replenishmentAmount).toString(),
+        replenishmentAmount: formatNumberForInput(initialData.replenishmentAmount || 0),
+        replenishmentFrequency: initialData.replenishmentFrequency || 'monthly',
+        replenishmentStartDate: formatDateForInput(initialData.replenishmentStartDate || ''),
+        replenishmentEndDate: formatDateForInput(initialData.replenishmentEndDate || '')
       })
     } else if (!initialData && isOpen) {
       // Reset form when not copying
@@ -133,7 +145,13 @@ export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetM
         purity: '',
         monthlyAmount: '',
         frequency: 'monthly',
-        amount: ''
+        amount: '',
+        // Replenishment fields
+        enableReplenishment: 'false',
+        replenishmentAmount: '',
+        replenishmentFrequency: 'monthly',
+        replenishmentStartDate: '',
+        replenishmentEndDate: ''
       })
     }
   }, [initialData, isOpen])
@@ -252,7 +270,14 @@ export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetM
           interestType: formData.interestType as 'simple' | 'compound' | 'progressive' | 'variable' | 'tiered',
           progressiveRates,
           variableRates,
-          tieredRates
+          tieredRates,
+          // Include replenishment data if enabled
+          ...(formData.enableReplenishment === 'true' && {
+            replenishmentAmount: parseFormattedNumber(formData.replenishmentAmount),
+            replenishmentFrequency: formData.replenishmentFrequency as 'monthly' | 'quarterly' | 'annually',
+            replenishmentStartDate: formData.replenishmentStartDate || undefined,
+            replenishmentEndDate: formData.replenishmentEndDate || undefined
+          })
         }
         const depositValue = calculateDepositValue(depositInfo)
         
@@ -272,7 +297,16 @@ export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetM
           daysElapsed: depositValue.daysElapsed,
           status: getDepositStatus(depositValue),
           isMatured: depositValue.isMatured,
-          projectedMaturityValue: depositValue.projectedMaturityValue
+          projectedMaturityValue: depositValue.projectedMaturityValue,
+          // Include replenishment data if enabled
+          ...(formData.enableReplenishment === 'true' && {
+            replenishmentAmount: parseFormattedNumber(formData.replenishmentAmount),
+            replenishmentFrequency: formData.replenishmentFrequency,
+            replenishmentStartDate: formData.replenishmentStartDate || undefined,
+            replenishmentEndDate: formData.replenishmentEndDate || undefined,
+            totalReplenishments: depositValue.totalReplenishments,
+            totalPrincipal: depositValue.totalPrincipal
+          })
         }
         break
       case 'preciousMetal':
@@ -335,7 +369,13 @@ export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetM
       purity: '',
       monthlyAmount: '',
       frequency: 'monthly',
-      amount: ''
+      amount: '',
+      // Replenishment fields
+      enableReplenishment: 'false',
+      replenishmentAmount: '',
+      replenishmentFrequency: 'monthly',
+      replenishmentStartDate: '',
+      replenishmentEndDate: ''
     })
     setStockSymbol(null)
   }
@@ -701,6 +741,85 @@ export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetM
                     {t('addAssetModal.maturityDateHelp')}
                   </p>
                 </div>
+
+                {/* Recurring Replenishment Section */}
+                <div className="border border-border rounded-lg p-4 bg-muted/50">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <input
+                      type="checkbox"
+                      id="enableReplenishment"
+                      checked={formData.enableReplenishment === 'true'}
+                      onChange={(e) => handleInputChange('enableReplenishment', e.target.checked.toString())}
+                      className="rounded border-input"
+                    />
+                    <label htmlFor="enableReplenishment" className="text-sm font-medium text-foreground">
+                      {t('assetTypes.deposit.replenishment.enable')}
+                    </label>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    {t('assetTypes.deposit.replenishment.help')}
+                  </p>
+
+                  {formData.enableReplenishment === 'true' && (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-foreground mb-1">
+                            {t('assetTypes.deposit.replenishment.amount')} ({currency})
+                          </label>
+                          <Input
+                            value={formData.replenishmentAmount}
+                            onChange={(e) => handleNumberInput('replenishmentAmount', e.target.value)}
+                            placeholder="0.00"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-foreground mb-1">
+                            {t('assetTypes.deposit.replenishment.frequency')}
+                          </label>
+                          <select
+                            value={formData.replenishmentFrequency}
+                            onChange={(e) => handleInputChange('replenishmentFrequency', e.target.value)}
+                            className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                          >
+                            <option value="monthly">{t('assetTypes.deposit.scheduleOptions.monthly')}</option>
+                            <option value="quarterly">{t('assetTypes.deposit.scheduleOptions.quarterly')}</option>
+                            <option value="annually">{t('assetTypes.deposit.scheduleOptions.annually')}</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-foreground mb-1">
+                            {t('assetTypes.deposit.replenishment.startDate')}
+                          </label>
+                          <Input
+                            type="date"
+                            value={formData.replenishmentStartDate}
+                            onChange={(e) => handleInputChange('replenishmentStartDate', e.target.value)}
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Leave empty to start with deposit start date
+                          </p>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-foreground mb-1">
+                            {t('assetTypes.deposit.replenishment.endDate')}
+                          </label>
+                          <Input
+                            type="date"
+                            value={formData.replenishmentEndDate}
+                            onChange={(e) => handleInputChange('replenishmentEndDate', e.target.value)}
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Leave empty to continue until maturity
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
                 
                 {/* Deposit Preview */}
                 {formData.principal && formData.rate && formData.startDate && (
@@ -751,7 +870,14 @@ export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetM
                         interestType: formData.interestType as 'simple' | 'compound' | 'progressive' | 'variable' | 'tiered',
                         progressiveRates,
                         variableRates,
-                        tieredRates
+                        tieredRates,
+                        // Include replenishment data if enabled
+                        ...(formData.enableReplenishment === 'true' && {
+                          replenishmentAmount: parseFloat(formData.replenishmentAmount) || 0,
+                          replenishmentFrequency: formData.replenishmentFrequency as 'monthly' | 'quarterly' | 'annually',
+                          replenishmentStartDate: formData.replenishmentStartDate || undefined,
+                          replenishmentEndDate: formData.replenishmentEndDate || undefined
+                        })
                       }
                       const depositValue = calculateDepositValue(depositInfo)
                       
@@ -769,6 +895,22 @@ export function AddAssetModal({ isOpen, onClose, onAdd, initialData }: AddAssetM
                             <span className="text-muted-foreground">{t('addAssetModal.duration')}:</span>
                             <span className="font-medium">{formatDepositDuration(depositValue)}</span>
                           </div>
+                          {formData.enableReplenishment === 'true' && depositValue.totalReplenishments && (
+                            <>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">{t('assetTypes.deposit.replenishment.total')}:</span>
+                                <span className="font-medium text-blue-600">
+                                  {currency} {depositValue.totalReplenishments.toFixed(2)}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">{t('assetTypes.deposit.replenishment.totalPrincipal')}:</span>
+                                <span className="font-medium">
+                                  {currency} {(depositValue.totalPrincipal || 0).toFixed(2)}
+                                </span>
+                              </div>
+                            </>
+                          )}
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">{t('addAssetModal.interestEarned')}:</span>
                             <span className="font-medium text-green-600">

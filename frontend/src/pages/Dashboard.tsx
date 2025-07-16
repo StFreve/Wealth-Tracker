@@ -22,6 +22,7 @@ import {
   BarChart3,
   TrendingDown
 } from 'lucide-react';
+import { usePortfolioMetrics } from '../contexts/PortfolioMetricsContext';
 
 // Backend currency functions
 const formatCurrencyWithSymbol = (amount: number, currency: string = 'USD') => {
@@ -31,49 +32,22 @@ const formatCurrencyWithSymbol = (amount: number, currency: string = 'USD') => {
   }).format(amount);
 };
 
-const convertValue = async (
-  amount: number,
-  fromCurrency: string,
-  toCurrency: string,
-  convertAmount: (amount: number, from: string, to: string) => Promise<number>
-) => {
-  // Safety checks
-  if (isNaN(amount) || amount === null || amount === undefined) {
-    return 0;
-  }
-  
-  if (!fromCurrency || !toCurrency) {
-    return amount;
-  }
-  
-  if (fromCurrency === toCurrency) return amount;
-  
-  try {
-    const converted = await convertAmount(amount, fromCurrency, toCurrency);
-    return isNaN(converted) ? amount : converted;
-  } catch (error) {
-    console.error('Failed to convert currency:', error);
-    return amount;
-  }
-};
-
 export default function Dashboard() {
   const { t } = useTranslation();
   const { user } = useAuth();
-  const { displayCurrency, setDisplayCurrency, isConverting, setIsConverting } = useCurrency();
+  const { displayCurrency } = useCurrency();
   const navigate = useNavigate();
-  const [portfolioMetrics, setPortfolioMetrics] = useState<PortfolioMetrics | null>(null);
-  const [originalMetrics, setOriginalMetrics] = useState<PortfolioMetrics | null>(null); // Store original USD metrics
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  
-  // Use backend currency rates hook
-  const { convertAmount } = useBackendCurrencyRates();
+  const { portfolioMetrics, loading, error, isConverting, refresh } = usePortfolioMetrics();
+
+  const formatCurrencyWithSymbol = (amount: number, currency: string = 'USD') => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency
+    }).format(amount);
+  };
 
   const formatCurrency = (amount: number) => {
-    // Safety check for amount
     const safeAmount = isNaN(amount) || amount === null || amount === undefined ? 0 : amount;
-    // Ensure displayCurrency is valid
     const safeCurrency = displayCurrency && displayCurrency.length === 3 ? displayCurrency : 'USD';
     return formatCurrencyWithSymbol(safeAmount, safeCurrency);
   };
@@ -100,12 +74,12 @@ export default function Dashboard() {
     navigate('/settings');
   };
 
-  // Generate wealth change data for the chart
+  // Generate wealth change data for the chart with historical and forecast data
   const generateWealthChangeData = (metrics: PortfolioMetrics) => {
     const months = [];
     const currentDate = new Date();
     
-    // Generate last 12 months of data
+    // Generate last 12 months of historical data
     for (let i = 11; i >= 0; i--) {
       const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
       const monthName = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
@@ -122,179 +96,151 @@ export default function Dashboard() {
       months.push({
         month: monthName,
         value: Math.max(estimatedValue, 0), // Ensure non-negative
-        change: estimatedChange
+        change: estimatedChange,
+        isForecast: false
+      });
+    }
+    
+    // Calculate forecast parameters
+    const currentValue = metrics.totalValue;
+    const baselineMonthlyChange = metrics.monthlyChange; // This includes recurring income + replenishments + interest
+    
+    // For forecasting, we'll use the actual monthlyChange as our baseline
+    // since it already includes replenishment contributions from the backend calculation
+    
+    // Calculate a conservative portfolio growth rate for applying to the growing balance
+    const totalInvestment = metrics.performanceMetrics.totalInvestment;
+    let portfolioGrowthRate = 0.005; // Default 0.5% monthly growth
+    
+    if (totalInvestment > 0 && metrics.totalGainLoss !== 0) {
+      // Calculate annual return rate and convert to monthly, but be conservative
+      const annualReturnRate = metrics.totalGainLoss / totalInvestment;
+      portfolioGrowthRate = Math.max(-0.02, Math.min(0.02, annualReturnRate / 12)); // Limit to ±2% monthly
+    }
+    
+    // Generate next 12 months of forecast data
+    let forecastValue = currentValue;
+    
+    for (let i = 1; i <= 12; i++) {
+      const date = new Date(currentDate.getFullYear(), currentDate.getMonth() + i, 1);
+      const monthName = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+      
+      // Only use the baseline monthly change (already includes all growth factors)
+      const variabilityFactor = 0.9 + (Math.random() * 0.2); // Random between 0.9 and 1.1 (±10%)
+      const forecastChange = baselineMonthlyChange * variabilityFactor;
+      
+      forecastValue += forecastChange;
+      
+      // Ensure forecast value doesn't go negative
+      forecastValue = Math.max(forecastValue, currentValue * 0.5);
+      
+      months.push({
+        month: monthName,
+        value: forecastValue,
+        change: forecastChange,
+        isForecast: true
       });
     }
     
     return months;
   };
 
-  // Helper function to convert metrics directly (for immediate conversion after load)
-  const convertMetricsDirectly = async (metrics: PortfolioMetrics, targetCurrency: string) => {
-    try {
-      // Convert main metrics from USD values
-      const convertedTotalValue = await convertValue(metrics.totalValue, 'USD', targetCurrency, convertAmount);
-      const convertedTotalGainLoss = await convertValue(metrics.totalGainLoss, 'USD', targetCurrency, convertAmount);
-      const convertedMonthlyChange = await convertValue(metrics.monthlyChange, 'USD', targetCurrency, convertAmount);
-      const convertedYearlyChange = await convertValue(metrics.yearlyChange, 'USD', targetCurrency, convertAmount);
-
-      // Convert asset allocation from USD values
-      const convertedAssetAllocation = await Promise.all(
-        metrics.assetAllocation.map(async (allocation) => ({
-          ...allocation,
-          value: await convertValue(allocation.value, 'USD', targetCurrency, convertAmount)
-        }))
-      );
-
-      // Convert recent transactions from their original currencies
-      const convertedRecentTransactions = await Promise.all(
-        metrics.recentTransactions.map(async (transaction) => ({
-          ...transaction,
-          amount: await convertValue(transaction.amount, transaction.currency, targetCurrency, convertAmount)
-        }))
-      );
-
-      // Convert performance metrics from USD values
-      const convertedPerformanceMetrics = {
-        totalInvestment: await convertValue(metrics.performanceMetrics.totalInvestment, 'USD', targetCurrency, convertAmount),
-        totalReturn: await convertValue(metrics.performanceMetrics.totalReturn, 'USD', targetCurrency, convertAmount),
-        averageReturn: await convertValue(metrics.performanceMetrics.averageReturn, 'USD', targetCurrency, convertAmount),
-        monthlyRecurringIncome: await convertValue(metrics.performanceMetrics.monthlyRecurringIncome, 'USD', targetCurrency, convertAmount),
-        annualRecurringIncome: await convertValue(metrics.performanceMetrics.annualRecurringIncome, 'USD', targetCurrency, convertAmount),
-      };
-
-      const convertedMetrics = {
-        ...metrics,
-        totalValue: convertedTotalValue,
-        totalGainLoss: convertedTotalGainLoss,
-        monthlyChange: convertedMonthlyChange,
-        yearlyChange: convertedYearlyChange,
-        assetAllocation: convertedAssetAllocation,
-        recentTransactions: convertedRecentTransactions,
-        performanceMetrics: convertedPerformanceMetrics
-      };
-
-      setPortfolioMetrics(convertedMetrics);
-    } catch (error) {
-      console.error('Failed to convert metrics directly:', error);
-      // Fallback to original metrics if conversion fails
-      setPortfolioMetrics(metrics);
-    } finally {
-      setIsConverting(false);
-    }
-  };
-
   // Load portfolio metrics
   const loadPortfolioMetrics = async (targetCurrency?: string) => {
     try {
-      setLoading(true);
-      setError(null);
-      const metrics = await portfolioApi.getPortfolioMetrics();
-      setOriginalMetrics(metrics); // Store original USD metrics
+      // setLoading(true); // This is now handled by the context
+      // setError(null); // This is now handled by the context
+      // const metrics = await portfolioApi.getPortfolioMetrics(); // This is now handled by the context
+      // setOriginalMetrics(metrics); // Store original USD metrics // This is now handled by the context
       
       // Use the passed currency or current display currency
       const currency = targetCurrency || displayCurrency;
       
       // If display currency is not USD, convert immediately
       if (currency !== 'USD') {
-        setIsConverting(true);
-        await convertMetricsDirectly(metrics, currency);
-      } else {
-        setPortfolioMetrics(metrics);
+        // setIsConverting(true); // This is now handled by the context
+        // await convertMetricsDirectly(portfolioMetrics!, currency); // Use portfolioMetrics from context
       }
+      // else { // This is now handled by the context
+      //   // setPortfolioMetrics(metrics); // This is now handled by the context
+      // }
     } catch (err) {
       console.error('Failed to load portfolio metrics:', err);
-      setError('Failed to load portfolio data. Please try again.');
+      // setError('Failed to load portfolio data. Please try again.'); // This is now handled by the context
     } finally {
-      setLoading(false);
+      // setLoading(false); // This is now handled by the context
     }
   };
 
   // Convert portfolio metrics to display currency
   const convertPortfolioMetrics = async (targetCurrency: string) => {
-    if (!originalMetrics) {
+    if (!portfolioMetrics) { // Use portfolioMetrics from context
       return;
     }
     
     // Ensure targetCurrency is a string
     const safeCurrency = typeof targetCurrency === 'string' ? targetCurrency : String(targetCurrency);
     
-    setIsConverting(true);
+    // setIsConverting(true); // This is now handled by the context
     try {
       // If target currency is USD, just use original metrics
       if (safeCurrency === 'USD') {
-        setPortfolioMetrics(originalMetrics);
+        // setPortfolioMetrics(originalMetrics); // This is now handled by the context
         return;
       }
 
       // Convert main metrics from original USD values
-      const convertedTotalValue = await convertValue(originalMetrics.totalValue, 'USD', safeCurrency, convertAmount);
-      const convertedTotalGainLoss = await convertValue(originalMetrics.totalGainLoss, 'USD', safeCurrency, convertAmount);
-      const convertedMonthlyChange = await convertValue(originalMetrics.monthlyChange, 'USD', safeCurrency, convertAmount);
-      const convertedYearlyChange = await convertValue(originalMetrics.yearlyChange, 'USD', safeCurrency, convertAmount);
+      const convertedTotalValue = portfolioMetrics.totalValue; // Use portfolioMetrics from context
+      const convertedTotalGainLoss = portfolioMetrics.totalGainLoss; // Use portfolioMetrics from context
+      const convertedMonthlyChange = portfolioMetrics.monthlyChange; // Use portfolioMetrics from context
+      const convertedYearlyChange = portfolioMetrics.yearlyChange; // Use portfolioMetrics from context
 
       // Convert asset allocation from original USD values
-      const convertedAssetAllocation = await Promise.all(
-        originalMetrics.assetAllocation.map(async (allocation) => ({
-          ...allocation,
-          value: await convertValue(allocation.value, 'USD', safeCurrency, convertAmount)
-        }))
-      );
+      const convertedAssetAllocation = portfolioMetrics.assetAllocation; // Use portfolioMetrics from context
 
       // Convert recent transactions from their original currencies
-      const convertedRecentTransactions = await Promise.all(
-        originalMetrics.recentTransactions.map(async (transaction) => ({
-          ...transaction,
-          amount: await convertValue(transaction.amount, transaction.currency, safeCurrency, convertAmount)
-        }))
-      );
+      const convertedRecentTransactions = portfolioMetrics.recentTransactions; // Use portfolioMetrics from context
 
       // Convert performance metrics from original USD values
-      const convertedPerformanceMetrics = {
-        totalInvestment: await convertValue(originalMetrics.performanceMetrics.totalInvestment, 'USD', safeCurrency, convertAmount),
-        totalReturn: await convertValue(originalMetrics.performanceMetrics.totalReturn, 'USD', safeCurrency, convertAmount),
-        averageReturn: await convertValue(originalMetrics.performanceMetrics.averageReturn, 'USD', safeCurrency, convertAmount),
-        monthlyRecurringIncome: await convertValue(originalMetrics.performanceMetrics.monthlyRecurringIncome, 'USD', safeCurrency, convertAmount),
-        annualRecurringIncome: await convertValue(originalMetrics.performanceMetrics.annualRecurringIncome, 'USD', safeCurrency, convertAmount),
-      };
+      const convertedPerformanceMetrics = portfolioMetrics.performanceMetrics; // Use portfolioMetrics from context
 
-      setPortfolioMetrics({
-        ...originalMetrics,
-        totalValue: convertedTotalValue,
-        totalGainLoss: convertedTotalGainLoss,
-        monthlyChange: convertedMonthlyChange,
-        yearlyChange: convertedYearlyChange,
-        assetAllocation: convertedAssetAllocation,
-        recentTransactions: convertedRecentTransactions,
-        performanceMetrics: convertedPerformanceMetrics
-      });
+      // setPortfolioMetrics({ // This is now handled by the context
+      //   ...originalMetrics,
+      //   totalValue: convertedTotalValue,
+      //   totalGainLoss: convertedTotalGainLoss,
+      //   monthlyChange: convertedMonthlyChange,
+      //   yearlyChange: convertedYearlyChange,
+      //   assetAllocation: convertedAssetAllocation,
+      //   recentTransactions: convertedRecentTransactions,
+      //   performanceMetrics: convertedPerformanceMetrics
+      // });
     } catch (error) {
       console.error('Failed to convert currencies:', error);
       // Keep original metrics if conversion fails
-      setPortfolioMetrics(originalMetrics);
+      // setPortfolioMetrics(originalMetrics); // This is now handled by the context
     } finally {
-      setIsConverting(false);
+      // setIsConverting(false); // This is now handled by the context
     }
   };
 
 
 
   const refreshData = () => {
-    loadPortfolioMetrics();
+    refresh(); // Use refresh from context
   };
 
   // Initialize on mount
   useEffect(() => {
-    loadPortfolioMetrics(displayCurrency); // Pass the currency to load and convert immediately
+    refresh(); // Use refresh from context
   }, []);
 
   // Convert metrics when currency changes (but not on initial load)
   useEffect(() => {
-    if (originalMetrics && displayCurrency && originalMetrics.totalValue > 0) {
+    if (portfolioMetrics && portfolioMetrics.totalValue > 0) { // Use portfolioMetrics from context
       // Only convert if we have valid metrics and it's not the initial load
-      convertPortfolioMetrics(displayCurrency);
+      // convertPortfolioMetrics(displayCurrency);
     }
-  }, [displayCurrency]); // Remove originalMetrics dependency to prevent infinite loops
+  }, [displayCurrency, portfolioMetrics]); // Add portfolioMetrics dependency to prevent infinite loops
 
   if (loading) {
     return (
@@ -389,23 +335,6 @@ export default function Dashboard() {
           </div>
         </Card>
 
-        {/* Total Assets Count */}
-        <Card className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                {t('dashboard.totalAssets')}
-              </p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                {portfolioMetrics.assetCount}
-              </p>
-            </div>
-            <div className="p-3 bg-blue-500/10 rounded-full">
-              <PieChartIcon className="h-6 w-6 text-blue-600" />
-            </div>
-          </div>
-        </Card>
-
         {/* Monthly Change */}
         <Card className="p-6">
           <div className="flex items-center justify-between">
@@ -471,52 +400,51 @@ export default function Dashboard() {
             </div>
           </div>
         </Card>
-      </div>
 
-      {/* Performance Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Estimated Yearly Change */}
         <Card className="p-6">
-          <div className="text-center">
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-              {t('dashboard.totalInvestment')}
-            </p>
-            <p className="text-xl font-bold text-gray-900 dark:text-white">
-              {formatCurrency(portfolioMetrics.performanceMetrics.totalInvestment)}
-            </p>
-          </div>
-        </Card>
-
-        <Card className="p-6">
-          <div className="text-center">
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-              {t('dashboard.monthlyRecurringIncome')}
-            </p>
-            <p className="text-xl font-bold text-green-600">
-              {formatCurrency(portfolioMetrics.performanceMetrics.monthlyRecurringIncome)}
-            </p>
-          </div>
-        </Card>
-
-        <Card className="p-6">
-          <div className="text-center">
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-              {t('dashboard.annualRecurringIncome')}
-            </p>
-            <p className="text-xl font-bold text-green-600">
-              {formatCurrency(portfolioMetrics.performanceMetrics.annualRecurringIncome)}
-            </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {t('dashboard.estimatedYearlyChange')}
+              </p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                {formatCurrency(portfolioMetrics.monthlyChange * 12)}
+              </p>
+              <div className="flex items-center gap-1 mt-1">
+                {(portfolioMetrics.monthlyChangePercent * 12) >= 0 ? (
+                  <ArrowUpIcon className="h-4 w-4 text-green-500" />
+                ) : (
+                  <ArrowDownIcon className="h-4 w-4 text-red-500" />
+                )}
+                <span className={`text-sm ${
+                  (portfolioMetrics.monthlyChangePercent * 12) >= 0
+                    ? 'text-green-600'
+                    : 'text-red-600'
+                }`}>
+                  {formatPercent(portfolioMetrics.monthlyChangePercent * 12)}
+                </span>
+              </div>
+            </div>
+            <div className="p-3 bg-yellow-500/10 rounded-full">
+              <TrendingUpIcon className="h-6 w-6 text-yellow-600" />
+            </div>
           </div>
         </Card>
       </div>
-
 
 
       {/* Wealth Change Over Time Chart */}
       <Card className="p-6">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            {t('dashboard.wealthChangeOverTime')}
-          </h3>
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              {t('dashboard.wealthChangeOverTime')}
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              {t('dashboard.historicalAndForecastData')}
+            </p>
+          </div>
           <Button variant="outline" size="sm" onClick={handleViewAnalytics}>
             <BarChart3 className="h-4 w-4 mr-2" />
             {t('navigation.analytics')}

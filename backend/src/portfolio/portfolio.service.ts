@@ -340,6 +340,33 @@ export class PortfolioService {
         const monthlyInterest = principal * monthlyRate;
         const monthlyInterestUSD = await this.convertAssetValueToUSD(monthlyInterest, asset.currency);
         totalMonthlyChange += safeNumber(monthlyInterestUSD);
+
+        // Add monthly replenishment if enabled
+        const replenishmentAmount = safeNumber((asset as any).replenishmentAmount);
+        const replenishmentFrequency = (asset as any).replenishmentFrequency;
+        
+        if (replenishmentAmount > 0 && replenishmentFrequency) {
+          let monthlyReplenishment = 0;
+          switch (replenishmentFrequency) {
+            case 'monthly':
+              monthlyReplenishment = replenishmentAmount;
+              break;
+            case 'quarterly':
+              monthlyReplenishment = replenishmentAmount / 3;
+              break;
+            case 'semiannual':
+              monthlyReplenishment = replenishmentAmount / 6;
+              break;
+            case 'annually':
+              monthlyReplenishment = replenishmentAmount / 12;
+              break;
+          }
+          
+          if (monthlyReplenishment > 0) {
+            const monthlyReplenishmentUSD = await this.convertAssetValueToUSD(monthlyReplenishment, asset.currency);
+            totalMonthlyChange += safeNumber(monthlyReplenishmentUSD);
+          }
+        }
       } else {
         // Estimate monthly change based on current gain and time held
         const purchaseDate = asset.purchaseDate || asset.createdAt;
@@ -377,6 +404,33 @@ export class PortfolioService {
         const annualInterest = principal * (interestRate / 100);
         const annualInterestUSD = await this.convertAssetValueToUSD(annualInterest, asset.currency);
         totalYearlyChange += safeNumber(annualInterestUSD);
+
+        // Add annual replenishment if enabled
+        const replenishmentAmount = safeNumber((asset as any).replenishmentAmount);
+        const replenishmentFrequency = (asset as any).replenishmentFrequency;
+        
+        if (replenishmentAmount > 0 && replenishmentFrequency) {
+          let annualReplenishment = 0;
+          switch (replenishmentFrequency) {
+            case 'monthly':
+              annualReplenishment = replenishmentAmount * 12;
+              break;
+            case 'quarterly':
+              annualReplenishment = replenishmentAmount * 4;
+              break;
+            case 'semiannual':
+              annualReplenishment = replenishmentAmount * 2;
+              break;
+            case 'annually':
+              annualReplenishment = replenishmentAmount;
+              break;
+          }
+          
+          if (annualReplenishment > 0) {
+            const annualReplenishmentUSD = await this.convertAssetValueToUSD(annualReplenishment, asset.currency);
+            totalYearlyChange += safeNumber(annualReplenishmentUSD);
+          }
+        }
       } else {
         // Estimate yearly change based on current gain and time held
         const purchaseDate = asset.purchaseDate || asset.createdAt;

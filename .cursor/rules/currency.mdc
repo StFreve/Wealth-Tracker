@@ -1,0 +1,4 @@
+---
+alwaysApply: true
+---
+Any new functionality that works with currencies should take in consideration display currency and properly apply exchange rate to it
