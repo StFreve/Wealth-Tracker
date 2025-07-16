@@ -66,14 +66,6 @@ export default function Dashboard() {
     navigate('/assets');
   };
 
-  const handleViewAnalytics = () => {
-    navigate('/analytics');
-  };
-
-  const handleCreateWidget = () => {
-    navigate('/settings');
-  };
-
   // Generate wealth change data for the chart with historical and forecast data
   const generateWealthChangeData = (metrics: PortfolioMetrics) => {
     const months = [];
@@ -445,10 +437,6 @@ export default function Dashboard() {
               {t('dashboard.historicalAndForecastData')}
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={handleViewAnalytics}>
-            <BarChart3 className="h-4 w-4 mr-2" />
-            {t('navigation.analytics')}
-          </Button>
         </div>
         
         {portfolioMetrics ? (
