@@ -36,7 +36,7 @@ wealth-tracker/
 
 1. **Clone and setup**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/StFreve/Wealth-Tracker
    cd wealth-tracker
    npm run install:all
    ```
